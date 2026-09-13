@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="מערכת מקומית לבניית שיבוצי שעות דיפרנציאליות" />
+    <title>מערכת שיבוצים דיפרנציאליים</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p id="projectEyebrow" class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
+        <h1 id="projectTitle">פרויקט חדש</h1>
+      </div>
+      <div class="topbar-actions">
+        <a class="new-project-link" href="setup.html">פרויקט חדש</a>
+        <div class="draft-pill"><span></span> טיוטת עבודה</div>
+      </div>
+    </header>
+
+    <main>
+      <section id="emptyProjectState" class="empty-project-state" hidden>
+        <div>
+          <p class="eyebrow dark">אין נתונים במערכת</p>
+          <h2>טענו קובץ פרויקט או התחילו פרויקט חדש</h2>
+          <p>הנתונים נקראים ונשמרים בדפדפן של המכשיר הזה בלבד. הם אינם נשלחים לאתר או נשמרים בשרת.</p>
+        </div>
+        <div class="empty-project-actions">
+          <button id="emptyImportButton" class="primary-button" type="button">טעינת קובץ פרויקט</button>
+          <a class="secondary-button button-link" href="setup.html">יצירת פרויקט חדש</a>
+        </div>
+      </section>
+
+      <section class="summary" aria-label="סיכום השיבוץ">
+        <article><strong id="assignedCount">—</strong><span>שעות משובצות</span></article>
+        <article><strong id="studentCount">—</strong><span>תלמידים קיבלו מענה</span></article>
+        <article><strong id="missingCount">—</strong><span>שעות עדיין חסרות</span></article>
+        <article><strong id="lateCount">—</strong><span>שיבוצים בשעה 9</span></article>
+      </section>
+
+      <nav class="view-tabs" aria-label="בחירת תצוגה">
+        <button class="view-tab active" data-view="schedule" type="button">מערכת שבועית</button>
+        <button class="view-tab" data-view="students" type="button">לפי תלמידים</button>
+        <button class="view-tab" data-view="teachers" type="button">לפי צוות</button>
+      </nav>
+
+      <section class="workspace">
+        <div class="board-panel">
+          <div class="toolbar">
+            <div>
+              <h2>מערכת שבועית</h2>
+              <p>כל הכרטיסים המוצגים עומדים באילוצים שהוגדרו.</p>
+            </div>
+            <div class="toolbar-controls">
+              <label class="search-box">
+                <span class="sr-only">חיפוש תלמיד</span>
+                <input id="studentSearch" type="search" placeholder="חיפוש תלמיד/ה" autocomplete="off" />
+              </label>
+              <label class="teacher-filter">
+                <span>הצגה</span>
+                <select id="teacherFilter" aria-label="סינון לפי מורה">
+                  <option value="all">כל הצוות</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div id="scheduleView" class="content-view">
+            <div class="schedule-legend" aria-label="מקרא">
+              <span><i class="dot grade-yod-dot"></i> שכבת י׳</span>
+              <span><i class="dot grade-yod-aleph-dot"></i> שכבת י״א</span>
+              <span><i class="dot edge-dot"></i> שעת קצה</span>
+              <span class="hint">לחיצה על שיבוץ פותחת אפשרויות שינוי</span>
+            </div>
+            <div class="schedule-wrap">
+              <div id="scheduleGrid" class="schedule-grid" aria-live="polite"></div>
+            </div>
+          </div>
+          <div id="studentsView" class="content-view" hidden></div>
+          <div id="teachersView" class="content-view" hidden></div>
+        </div>
+
+        <aside class="side-panel">
+          <div class="side-heading">
+            <span class="warning-icon">!</span>
+            <div><h2>דורש טיפול</h2><p>שעות שלא נמצאה להן מכסה.</p></div>
+          </div>
+          <div id="missingList"></div>
+          <section class="load-section">
+            <h3>ניצול שעות הצוות</h3>
+            <div id="teacherLoads"></div>
+          </section>
+          <div class="rule-note">
+            <strong>בדיקת המערכת</strong>
+            <div id="validationList" class="validation-list"></div>
+          </div>
+          <div class="side-actions">
+            <button id="manualButton" class="primary-button" type="button">הוספת שעה ידנית</button>
+            <button id="swapButton" class="secondary-button swap-launch" type="button">הצעת החלפה בין מורים</button>
+            <button id="locksButton" class="secondary-button" type="button">ניהול נעילות</button>
+            <button id="reportButton" class="primary-button" type="button">דו״ח מסכם לסגנית</button>
+            <button id="exportButton" class="secondary-button" type="button">גיבוי הטיוטה</button>
+            <button id="importButton" class="secondary-button" type="button">טעינת פרויקט / גיבוי</button>
+            <input id="importFile" type="file" accept=".json,application/json" hidden />
+            <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט הנוכחי</button>
+            <button id="resetButton" class="text-button" type="button">איפוס שינויים מקומיים</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <dialog id="editDialog" class="edit-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">עריכת שיבוץ</p><h2 id="dialogStudent">—</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <div id="dialogCurrent" class="current-assignment"></div>
+        <label class="option-picker">
+          <span>אפשרות חלופית חוקית</span>
+          <select id="alternativeSelect"></select>
+        </label>
+        <p id="dialogNote" class="dialog-note"></p>
+        <div class="dialog-actions">
+          <button id="saveMoveButton" class="primary-button" type="button">שמירת השינוי</button>
+          <button id="deleteAssignmentButton" class="danger-button" type="button">הסרת השעה</button>
+          <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="addDialog" class="edit-dialog add-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">עריכה ידנית</p><h2>הוספת שעה לתלמיד/ה</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <label class="option-picker">
+          <span>תלמיד/ה</span>
+          <select id="addStudentSelect"></select>
+        </label>
+        <div id="addStudentStatus" class="current-assignment"></div>
+        <label class="option-picker">
+          <span>מורה ומועד פנויים</span>
+          <select id="addOptionSelect"></select>
+        </label>
+        <p id="addDialogNote" class="dialog-note"></p>
+        <div class="dialog-actions">
+          <button id="addAssignmentButton" class="primary-button" type="button">הוספת השעה</button>
+          <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="swapDialog" class="edit-dialog swap-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">החלפת חבילת שעות</p><h2>מציאת תלמיד/ה להחלפה</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <div class="swap-intro">
+          <p>בחר/י תלמיד/ה. המערכת תציע החלפות מלאות ששומרות על מספר השעות ועל עומס המורות.</p>
+          <label class="option-picker swap-picker">
+            <span>תלמיד/ה</span>
+            <select id="swapStudentSelect"></select>
+          </label>
+        </div>
+        <div id="swapSuggestions" class="swap-suggestions" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">סגירה</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="locksDialog" class="edit-dialog locks-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">כללים שניתנים לשינוי</p><h2>ניהול נעילות תלמיד–מורה</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <p class="locks-intro">שחרור נעילה אינו משנה שיבוץ קיים. הוא מאפשר למערכת להציע העברות והחלפות למורות אחרות.</p>
+        <div id="locksList" class="locks-list"></div>
+        <div class="dialog-actions">
+          <button id="saveLocksButton" class="primary-button" type="button">שמירת הנעילות</button>
+          <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="schedule-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

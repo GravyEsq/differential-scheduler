@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="יצירת פרויקט חדש לשיבוץ שעות דיפרנציאליות" />
+    <title>פרויקט שיבוץ חדש</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="setup-page">
+    <header class="topbar setup-topbar">
+      <div>
+        <p class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
+        <h1>יצירת פרויקט חדש</h1>
+      </div>
+      <a class="new-project-link" href="index.html">חזרה למערכת</a>
+    </header>
+
+    <main class="setup-main">
+      <section class="setup-intro">
+        <h2>הגדרת הצוות והעלאת הנתונים</h2>
+        <p>ממלאים פרטי פרויקט, מורידים שתי תבניות שנפתחות באקסל, ומעלים אותן לאחר מילוי. המערכת בודקת את הנתונים ומפיקה טיוטת שיבוץ ראשונה.</p>
+      </section>
+
+      <form id="projectForm" class="setup-stack">
+        <section class="setup-card">
+          <div class="step-number">1</div>
+          <div class="setup-card-body">
+            <h2>פרטי הפרויקט</h2>
+            <div class="form-grid">
+              <label><span>בית הספר</span><input id="schoolInput" required placeholder="לדוגמה: בית הספר לדוגמה" /></label>
+              <label><span>שנת לימודים</span><input id="yearInput" required placeholder="לדוגמה: תשפ״ז" /></label>
+              <label><span>שם הצוות</span><input id="teamInput" required placeholder="לדוגמה: צוות מדעים" /></label>
+              <label><span>המקצוע</span><input id="subjectInput" required placeholder="לדוגמה: ביולוגיה" /></label>
+              <label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="aliasesInput" placeholder="מופרדים בפסיקים, לדוגמה: מדעים, ביולוגיה" /></label>
+              <label><span>שעה אחרונה מותרת</span><input id="lastPeriodInput" type="number" min="0" max="9" value="9" required /></label>
+              <label><span>שעות שרצוי להימנע מהן</span><input id="avoidPeriodsInput" value="0, 9" placeholder="לדוגמה: 0, 9" /></label>
+            </div>
+          </div>
+        </section>
+
+        <section class="setup-card">
+          <div class="step-number">2</div>
+          <div class="setup-card-body">
+            <h2>נתוני התלמידים</h2>
+            <p>יש להוסיף שורה לכל שעה אפשרית של כל תלמיד. שעות חסומות או תמיכות אחרות פשוט אינן נכללות.</p>
+            <div class="template-actions">
+              <button id="studentTemplateButton" class="secondary-button" type="button">הורדת תבנית תלמידים</button>
+              <label class="file-picker"><span>בחירת קובץ תלמידים</span><input id="studentFileInput" type="file" accept=".csv,text/csv" required /></label>
+            </div>
+            <div id="studentFileStatus" class="file-status">טרם נבחר קובץ.</div>
+          </div>
+        </section>
+
+        <section class="setup-card">
+          <div class="step-number">3</div>
+          <div class="setup-card-body">
+            <h2>נתוני המורים</h2>
+            <p>יש להוסיף שורה לכל שעה שמותר להשתמש בה. שיעורים פרונטליים וישיבות מוגנות אינם נכללים.</p>
+            <div class="template-actions">
+              <button id="teacherTemplateButton" class="secondary-button" type="button">הורדת תבנית מורים</button>
+              <label class="file-picker"><span>בחירת קובץ מורים</span><input id="teacherFileInput" type="file" accept=".csv,text/csv" required /></label>
+            </div>
+            <div id="teacherFileStatus" class="file-status">טרם נבחר קובץ.</div>
+          </div>
+        </section>
+
+        <section class="setup-card review-card">
+          <div class="step-number">4</div>
+          <div class="setup-card-body">
+            <h2>בדיקה והפקת שיבוץ</h2>
+            <div id="setupReview" class="setup-review">יש לבחור את שני קובצי הנתונים.</div>
+            <div class="setup-submit">
+              <button id="createProjectButton" class="primary-button" type="submit" disabled>יצירת הפרויקט ופתיחתו</button>
+            </div>
+          </div>
+        </section>
+      </form>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="setup.js"></script>
+  </body>
+</html>

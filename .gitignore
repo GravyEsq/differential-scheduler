@@ -1,0 +1,23 @@
+# Application code only. Never commit real scheduling data.
+*.xlsx
+*.xls
+*.csv
+*.pdf
+*.docx
+*.eml
+*.json
+!package.json
+!package-lock.json
+
+private-data/
+data/
+backups/
+exports/
+dist/*private*
+dist/*backup*
+dist/*גיבוי*
+dist/*טיוטה*
+
+.env
+.env.*
+!.env.example
