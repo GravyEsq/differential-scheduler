@@ -10,7 +10,7 @@
     8: { start: "14:45", end: "15:30" }, 9: { start: "15:40", end: "16:25" }
   };
   const STUDENT_REQUIRED_HEADERS = ["שם תלמיד", "כיתה", "מספר שעות", "יום", "שעה", "סוג זמינות", "מורה חובה", "מורה מועדפת"];
-  const STUDENT_HEADERS = [...STUDENT_REQUIRED_HEADERS, "מוכן/ה לשעה משותפת"];
+  const STUDENT_HEADERS = [...STUDENT_REQUIRED_HEADERS, "הסכמה לשיבוץ זוגי"];
   const TEACHER_REQUIRED_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
   const TEACHER_HEADERS = [...TEACHER_REQUIRED_HEADERS, "שעות הוראה קבועות ביום"];
   const activeProjectKey = "differential-active-project-v1";
@@ -98,6 +98,7 @@
 
   function normalizeStudentCategory(value, aliases) {
     const category = clean(value);
+    if (category === "במקום שיעור קיים") return "דריסת שיעור";
     if (["חלון", "קצה לפני", "קצה אחרי", "דריסת שיעור"].includes(category)) return category;
     if (category === "שיעור במקצוע" || aliases.some(alias => category.includes(alias))) return "שיעור במקצוע";
     return null;
@@ -105,7 +106,8 @@
 
   function normalizeTeacherCategory(value) {
     const category = clean(value);
-    if (["פנויה", "שעה פיקטיבית", "חלון", "קצה לפני", "קצה אחרי"].includes(category)) return category;
+    if (category === "שעה פיקטיבית") return "שעה גמישה";
+    if (["פנויה", "שעה גמישה", "חלון", "קצה לפני", "קצה אחרי"].includes(category)) return category;
     return null;
   }
 
@@ -127,12 +129,12 @@
       if (!Number.isInteger(period) || period < 0 || period > meta.lastPeriod) errors.push(`שורה ${line}: השעה אינה בטווח שהוגדר`);
       if (!category) errors.push(`שורה ${line}: סוג הזמינות אינו מוכר`);
       if (!name || !grade || !Number.isInteger(required) || !DAYS.includes(day) || !Number.isInteger(period) || !category) return;
-      const shareWilling = parseYes(row["מוכן/ה לשעה משותפת"]);
+      const shareWilling = parseYes(row["הסכמה לשיבוץ זוגי"] || row["מוכן/ה לשעה משותפת"]);
       if (!grouped.has(name)) grouped.set(name, { student: name, grade, required, requiredTeacher: clean(row["מורה חובה"]), preferredTeacher: clean(row["מורה מועדפת"]), shareWilling, candidates: [] });
       const student = grouped.get(name);
       if (student.grade !== grade || student.required !== required) errors.push(`שורה ${line}: הכיתה או מספר השעות אינם תואמים לשורות הקודמות של ${name}`);
       if (student.requiredTeacher !== clean(row["מורה חובה"]) || student.preferredTeacher !== clean(row["מורה מועדפת"])) errors.push(`שורה ${line}: הגדרות המורה אינן אחידות אצל ${name}`);
-      if (student.shareWilling !== shareWilling) errors.push(`שורה ${line}: הסימון לשעה משותפת אינו אחיד אצל ${name}`);
+      if (student.shareWilling !== shareWilling) errors.push(`שורה ${line}: ההסכמה לשיבוץ זוגי אינה אחידה אצל ${name}`);
       if (student.candidates.some(item => item.day === day && item.period === period)) errors.push(`שורה ${line}: האפשרות ${day} ${period} מופיעה פעמיים אצל ${name}`);
       student.candidates.push({ day, period, ...PERIOD_TIMES[period], category, avoid_if_possible: meta.avoidPeriods.includes(period) });
     });
@@ -176,7 +178,7 @@
       basePeriods.forEach(basePeriod => {
         if (!teacher.base_commitments.some(item => item.day === day && item.period === basePeriod)) teacher.base_commitments.push({ day, period: basePeriod });
       });
-      teacher.candidates.push({ day, period, ...PERIOD_TIMES[period], category, replaces: category === "שעה פיקטיבית" ? "שעה שניתנת לדריסה" : null, avoid_if_possible: avoidPeriods.includes(period) });
+      teacher.candidates.push({ day, period, ...PERIOD_TIMES[period], category, replaces: category === "שעה גמישה" ? "התחייבות גמישה" : null, avoid_if_possible: avoidPeriods.includes(period) });
     });
     return { items: [...grouped.values()], errors };
   }
@@ -245,7 +247,7 @@
 
   function optionCost(student, studentSlot, teacher, teacherSlot) {
     const studentCosts = { "חלון": 0, "שיעור במקצוע": 25, "קצה לפני": 70, "קצה אחרי": 70, "דריסת שיעור": 150 };
-    const teacherCosts = { "פנויה": 0, "שעה פיקטיבית": 0, "חלון": 5, "קצה לפני": 12, "קצה אחרי": 12 };
+    const teacherCosts = { "פנויה": 0, "שעה גמישה": 0, "שעה פיקטיבית": 0, "חלון": 5, "קצה לפני": 12, "קצה אחרי": 12 };
     let cost = (studentCosts[studentSlot.category] ?? 100) + (teacherCosts[teacherSlot.category] ?? 20);
     if (studentSlot.period < 1 || studentSlot.period > 6) cost += 20;
     if (studentSlot.avoid_if_possible || teacherSlot.avoid_if_possible) cost += 120;
@@ -351,7 +353,7 @@
     const requiredHours = students.reduce((sum, student) => sum + student.required, 0);
     return {
       schemaVersion: 2,
-      status: "טיוטה ראשונה",
+      status: "הצעה ראשונית",
       defaultLocks: Object.fromEntries(students.filter(student => student.requiredTeacher).map(student => [student.student, student.requiredTeacher])),
       rules_applied: { subject: meta.subject, aliases: meta.aliases, preferred_periods: "1-6", last_allowed_period: meta.lastPeriod, avoid_periods: meta.avoidPeriods, teacher_capacity_is_maximum: true },
       metrics: { assigned_hours: result.flow, missing_hours: requiredHours - result.flow, unserved_students: studentSummary.filter(item => !item.assigned).length, split_students: studentSummary.filter(item => !item.same_teacher).length, period9_assignments: assignments.filter(item => item.period === 9).length },
@@ -407,7 +409,7 @@
       if (student.requiredTeacher && !teacherNames.has(student.requiredTeacher)) errors.push(`מורת החובה של ${student.student} אינה מופיעה בקובץ המורים`);
       if (student.preferredTeacher && !teacherNames.has(student.preferredTeacher)) errors.push(`המורה המועדפת של ${student.student} אינה מופיעה בקובץ המורים`);
       const hasMatch = student.candidates.some(slot => state.teachers.some(teacher => teacherAllows(teacher, student) && teacher.candidates.some(candidate => candidate.day === slot.day && candidate.period === slot.period)));
-      if (!hasMatch) errors.push(`אין אף שעה משותפת בין ${student.student} לבין מורה מתאימה`);
+      if (!hasMatch) errors.push(`לא נמצאה חפיפת זמינות בין ${student.student} לבין מורה מתאימה`);
     });
     return errors;
   }
@@ -422,7 +424,7 @@
     }
     const required = state.students.reduce((sum, item) => sum + item.required, 0);
     const capacity = state.teachers.reduce((sum, item) => sum + item.quota, 0);
-    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת מורים מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">הנתונים תקינים. ניתן להפיק טיוטה ראשונה.</p>`}`;
+    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת צוות מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">הנתונים תקינים. ניתן להפיק הצעת שיבוץ ראשונית.</p>`}`;
   }
 
   function downloadCsv(filename, headers, rows) {
@@ -444,7 +446,7 @@
 
   function teacherTemplate() {
     downloadCsv("תבנית-מורים.csv", TEACHER_HEADERS, [
-      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה פיקטיבית", "י;יא", "יא", "0;9", 7, "1;2;4;5"],
+      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה גמישה", "י;יא", "יא", "0;9", 7, "1;2;4;5"],
       ["מורה לדוגמה", 1, 2, "שלישי", 4, "פנויה", "י;יא", "יא", "0;9", 7, "1;2;3;5"]
     ]);
   }

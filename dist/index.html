@@ -15,7 +15,7 @@
       </div>
       <div class="topbar-actions">
         <a class="new-project-link" href="setup.html">פרויקט חדש</a>
-        <div class="draft-pill"><span></span> טיוטת עבודה</div>
+        <div class="draft-pill"><span></span> מצב עריכה</div>
       </div>
     </header>
 
@@ -34,9 +34,9 @@
 
       <section class="summary" aria-label="סיכום השיבוץ">
         <article><strong id="assignedCount">—</strong><span>שעות משובצות</span></article>
-        <article><strong id="studentCount">—</strong><span>תלמידים קיבלו מענה</span></article>
-        <article><strong id="missingCount">—</strong><span>שעות עדיין חסרות</span></article>
-        <article><strong id="lateCount">—</strong><span>שיבוצים בשעה 9</span></article>
+        <article><strong id="studentCount">—</strong><span>תלמידים עם שיבוץ</span></article>
+        <article><strong id="missingCount">—</strong><span>שעות זכאות שטרם שובצו</span></article>
+        <article><strong id="lateCount">—</strong><span>שיבוצים בשעה האחרונה</span></article>
       </section>
 
       <nav class="view-tabs" aria-label="בחירת תצוגה">
@@ -50,7 +50,7 @@
           <div class="toolbar">
             <div>
               <h2>מערכת שבועית</h2>
-              <p>כל הכרטיסים המוצגים עומדים באילוצים שהוגדרו.</p>
+              <p>מוצגים השיבוצים התואמים למסננים הפעילים.</p>
             </div>
             <div class="toolbar-controls">
               <label class="search-box">
@@ -83,29 +83,29 @@
         <aside class="side-panel">
           <div class="side-heading">
             <span class="warning-icon">!</span>
-            <div><h2>דורש טיפול</h2><p>שעות שלא נמצאה להן מכסה.</p></div>
+            <div><h2>נושאים לבדיקה</h2><p>שעות זכאות שטרם שובצו.</p></div>
           </div>
           <div id="missingList"></div>
           <section class="load-section">
-            <h3>ניצול שעות הצוות</h3>
+            <h3>הקצאת שעות הצוות</h3>
             <div id="teacherLoads"></div>
           </section>
           <div class="rule-note">
-            <strong>בדיקת המערכת</strong>
+            <strong>בקרת שיבוץ</strong>
             <div id="validationList" class="validation-list"></div>
           </div>
           <div class="side-actions">
-            <button id="manualButton" class="primary-button" type="button">הוספת שעה ידנית</button>
-            <button id="swapButton" class="secondary-button swap-launch" type="button">הצעת החלפה בין מורים</button>
-            <button id="shareButton" class="secondary-button share-launch" type="button">שעה משותפת לשני תלמידים</button>
-            <button id="constraintsButton" class="secondary-button" type="button">אילוצי זמינות</button>
-            <button id="locksButton" class="secondary-button" type="button">ניהול נעילות</button>
-            <button id="reportButton" class="primary-button" type="button">דו״ח מסכם לסגנית</button>
-            <button id="exportButton" class="secondary-button" type="button">גיבוי הטיוטה</button>
-            <button id="importButton" class="secondary-button" type="button">טעינת פרויקט / גיבוי</button>
+            <button id="manualButton" class="primary-button" type="button">שיבוץ ידני</button>
+            <button id="swapButton" class="secondary-button swap-launch" type="button">הצעות להחלפה</button>
+            <button id="shareButton" class="secondary-button share-launch" type="button">שיבוץ זוגי</button>
+            <button id="constraintsButton" class="secondary-button" type="button">ניהול אילוצים</button>
+            <button id="locksButton" class="secondary-button" type="button">שיוכים קבועים</button>
+            <button id="reportButton" class="primary-button" type="button">הפקת דו״ח</button>
+            <button id="exportButton" class="secondary-button" type="button">ייצוא פרויקט</button>
+            <button id="importButton" class="secondary-button" type="button">ייבוא פרויקט</button>
             <input id="importFile" type="file" accept=".json,application/json" hidden />
-            <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט הנוכחי</button>
-            <button id="resetButton" class="text-button" type="button">איפוס שינויים מקומיים</button>
+            <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט</button>
+            <button id="resetButton" class="text-button" type="button">שחזור הגרסה הראשונית</button>
           </div>
         </aside>
       </section>
@@ -119,13 +119,13 @@
         </div>
         <div id="dialogCurrent" class="current-assignment"></div>
         <label class="option-picker">
-          <span>אפשרות חלופית חוקית</span>
+          <span>חלופה אפשרית</span>
           <select id="alternativeSelect"></select>
         </label>
         <p id="dialogNote" class="dialog-note"></p>
         <div class="dialog-actions">
-          <button id="saveMoveButton" class="primary-button" type="button">שמירת השינוי</button>
-          <button id="deleteAssignmentButton" class="danger-button" type="button">הסרת השעה</button>
+          <button id="saveMoveButton" class="primary-button" type="button">עדכון השיבוץ</button>
+          <button id="deleteAssignmentButton" class="danger-button" type="button">ביטול השיבוץ</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
       </form>
@@ -134,7 +134,7 @@
     <dialog id="addDialog" class="edit-dialog add-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">עריכה ידנית</p><h2>הוספת שעה לתלמיד/ה</h2></div>
+          <div><p class="eyebrow dark">שיבוץ ידני</p><h2>יצירת שיבוץ לתלמיד/ה</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
         <label class="option-picker">
@@ -143,12 +143,12 @@
         </label>
         <div id="addStudentStatus" class="current-assignment"></div>
         <label class="option-picker">
-          <span>מורה ומועד פנויים</span>
+          <span>בחירת מורה ומועד</span>
           <select id="addOptionSelect"></select>
         </label>
         <p id="addDialogNote" class="dialog-note"></p>
         <div class="dialog-actions">
-          <button id="addAssignmentButton" class="primary-button" type="button">הוספת השעה</button>
+          <button id="addAssignmentButton" class="primary-button" type="button">יצירת השיבוץ</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
       </form>
@@ -157,11 +157,11 @@
     <dialog id="swapDialog" class="edit-dialog swap-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">החלפת חבילת שעות</p><h2>מציאת תלמיד/ה להחלפה</h2></div>
+          <div><p class="eyebrow dark">בחינת חלופות</p><h2>הצעות להחלפת שיבוצים</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
         <div class="swap-intro">
-          <p>בחר/י תלמיד/ה. המערכת תציע החלפות מלאות ששומרות על מספר השעות ועל עומס המורות.</p>
+          <p>בחרו תלמיד או תלמידה. המערכת תציע החלפות ששומרות על היקף הזכאות ועל הקצאת שעות הצוות.</p>
           <label class="option-picker swap-picker">
             <span>תלמיד/ה</span>
             <select id="swapStudentSelect"></select>
@@ -177,13 +177,13 @@
     <dialog id="locksDialog" class="edit-dialog locks-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">כללים שניתנים לשינוי</p><h2>ניהול נעילות תלמיד–מורה</h2></div>
+          <div><p class="eyebrow dark">העדפות שיוך</p><h2>ניהול שיוכים קבועים</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
-        <p class="locks-intro">שחרור נעילה אינו משנה שיבוץ קיים. הוא מאפשר למערכת להציע העברות והחלפות למורות אחרות.</p>
+        <p class="locks-intro">ביטול שיוך קבוע אינו משנה שיבוץ קיים. הוא מאפשר למערכת להציע מורים נוספים בחלופות עתידיות.</p>
         <div id="locksList" class="locks-list"></div>
         <div class="dialog-actions">
-          <button id="saveLocksButton" class="primary-button" type="button">שמירת הנעילות</button>
+          <button id="saveLocksButton" class="primary-button" type="button">שמירת השיוכים</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
       </form>
@@ -192,15 +192,15 @@
     <dialog id="shareDialog" class="edit-dialog share-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">חריג מאושר</p><h2>שעה משותפת לשני תלמידים</h2></div>
+          <div><p class="eyebrow dark">שיבוץ זוגי</p><h2>שיעור משותף לשני תלמידים</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
-        <p class="locks-intro">סמנו מי מסכימ/ה לשעה משותפת. המערכת תציע רק צמדים ששניהם מסומנים ושעומדים באילוצי הזמינות.</p>
+        <p class="locks-intro">סמנו תלמידים שהסכימו לשיבוץ זוגי. המערכת תציע רק צמדים מתאימים שעומדים באילוצי הזמינות.</p>
         <div id="shareWillingList" class="share-willing-list"></div>
-        <div class="share-suggestions-head"><h3>הצעות לשיתוף</h3><span>נדרש אישור לפני שיבוץ</span></div>
+        <div class="share-suggestions-head"><h3>הצעות לשיבוץ זוגי</h3><span>כל הצעה מחייבת אישור</span></div>
         <div id="shareSuggestions" class="swap-suggestions" aria-live="polite"></div>
         <div class="dialog-actions">
-          <button id="saveShareWillingButton" class="primary-button" type="button">שמירת הסימונים ורענון הצעות</button>
+          <button id="saveShareWillingButton" class="primary-button" type="button">שמירת העדפות ועדכון הצעות</button>
           <button class="secondary-button" value="cancel">סגירה</button>
         </div>
       </form>
@@ -209,16 +209,16 @@
     <dialog id="constraintsDialog" class="edit-dialog constraints-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">עריכה ידנית</p><h2>אילוצי זמינות</h2></div>
+          <div><p class="eyebrow dark">ניהול אילוצים</p><h2>אילוצי זמינות</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
-        <p class="locks-intro">הוסיפו חסימה נקודתית. שיבוץ קיים לא יימחק אוטומטית, אך יסומן כבעיה עד שתטפלו בו.</p>
+        <p class="locks-intro">אפשר להגדיר חסימת זמינות נקודתית. שיבוץ קיים יישמר ויסומן לבדיקה עד לעדכונו.</p>
         <div class="constraint-form">
           <label><span>סוג</span><select id="constraintType"><option value="student">תלמיד/ה</option><option value="teacher">מורה</option></select></label>
           <label><span>שם</span><select id="constraintPerson"></select></label>
           <label><span>יום</span><select id="constraintDay"></select></label>
           <label><span>שעה</span><select id="constraintPeriod"></select></label>
-          <button id="addConstraintButton" class="primary-button" type="button">הוספת אילוץ</button>
+          <button id="addConstraintButton" class="primary-button" type="button">שמירת אילוץ</button>
         </div>
         <div id="constraintsList" class="constraints-list"></div>
         <div class="dialog-actions"><button class="secondary-button" value="cancel">סגירה</button></div>
