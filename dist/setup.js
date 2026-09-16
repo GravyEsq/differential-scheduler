@@ -9,8 +9,10 @@
     6: { start: "12:50", end: "13:35" }, 7: { start: "14:00", end: "14:45" },
     8: { start: "14:45", end: "15:30" }, 9: { start: "15:40", end: "16:25" }
   };
-  const STUDENT_HEADERS = ["שם תלמיד", "כיתה", "מספר שעות", "יום", "שעה", "סוג זמינות", "מורה חובה", "מורה מועדפת"];
-  const TEACHER_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
+  const STUDENT_REQUIRED_HEADERS = ["שם תלמיד", "כיתה", "מספר שעות", "יום", "שעה", "סוג זמינות", "מורה חובה", "מורה מועדפת"];
+  const STUDENT_HEADERS = [...STUDENT_REQUIRED_HEADERS, "מוכן/ה לשעה משותפת"];
+  const TEACHER_REQUIRED_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
+  const TEACHER_HEADERS = [...TEACHER_REQUIRED_HEADERS, "שעות הוראה קבועות ביום"];
   const activeProjectKey = "differential-active-project-v1";
   const state = { students: null, teachers: null, studentErrors: [], teacherErrors: [] };
 
@@ -46,6 +48,10 @@
 
   function parsePeriods(value) {
     return splitList(value).map(Number).filter(Number.isInteger);
+  }
+
+  function parseYes(value) {
+    return ["כן", "yes", "true", "1"].includes(clean(value).toLocaleLowerCase("he"));
   }
 
   function parseCsv(text) {
@@ -121,10 +127,12 @@
       if (!Number.isInteger(period) || period < 0 || period > meta.lastPeriod) errors.push(`שורה ${line}: השעה אינה בטווח שהוגדר`);
       if (!category) errors.push(`שורה ${line}: סוג הזמינות אינו מוכר`);
       if (!name || !grade || !Number.isInteger(required) || !DAYS.includes(day) || !Number.isInteger(period) || !category) return;
-      if (!grouped.has(name)) grouped.set(name, { student: name, grade, required, requiredTeacher: clean(row["מורה חובה"]), preferredTeacher: clean(row["מורה מועדפת"]), candidates: [] });
+      const shareWilling = parseYes(row["מוכן/ה לשעה משותפת"]);
+      if (!grouped.has(name)) grouped.set(name, { student: name, grade, required, requiredTeacher: clean(row["מורה חובה"]), preferredTeacher: clean(row["מורה מועדפת"]), shareWilling, candidates: [] });
       const student = grouped.get(name);
       if (student.grade !== grade || student.required !== required) errors.push(`שורה ${line}: הכיתה או מספר השעות אינם תואמים לשורות הקודמות של ${name}`);
       if (student.requiredTeacher !== clean(row["מורה חובה"]) || student.preferredTeacher !== clean(row["מורה מועדפת"])) errors.push(`שורה ${line}: הגדרות המורה אינן אחידות אצל ${name}`);
+      if (student.shareWilling !== shareWilling) errors.push(`שורה ${line}: הסימון לשעה משותפת אינו אחיד אצל ${name}`);
       if (student.candidates.some(item => item.day === day && item.period === period)) errors.push(`שורה ${line}: האפשרות ${day} ${period} מופיעה פעמיים אצל ${name}`);
       student.candidates.push({ day, period, ...PERIOD_TIMES[period], category, avoid_if_possible: meta.avoidPeriods.includes(period) });
     });
@@ -148,14 +156,16 @@
       const allowedGrades = splitList(row["שכבות מותרות"]);
       const preferredGrades = splitList(row["שכבות מועדפות"]);
       const avoidPeriods = [...new Set([...meta.avoidPeriods, ...parsePeriods(row["שעות להימנע"])])];
-      const maxConsecutive = clean(row["מקסימום רצוף"]) ? Number(row["מקסימום רצוף"]) : null;
+      const maxConsecutive = clean(row["מקסימום רצוף"]) ? Number(row["מקסימום רצוף"]) : 7;
+      const basePeriods = parsePeriods(row["שעות הוראה קבועות ביום"]);
       if (!name) errors.push(`שורה ${line}: חסר שם מורה`);
       if (!Number.isInteger(preferredQuota) || preferredQuota < 0) errors.push(`שורה ${line}: המכסה המועדפת אינה תקינה`);
       if (!Number.isInteger(quota) || quota <= 0 || preferredQuota > quota) errors.push(`שורה ${line}: המכסה המרבית אינה תקינה`);
       if (!DAYS.includes(day)) errors.push(`שורה ${line}: היום אינו מוכר`);
       if (!Number.isInteger(period) || period < 0 || period > meta.lastPeriod) errors.push(`שורה ${line}: השעה אינה בטווח שהוגדר`);
       if (!category) errors.push(`שורה ${line}: סוג הזמינות אינו מוכר`);
-      if (maxConsecutive !== null && (!Number.isInteger(maxConsecutive) || maxConsecutive <= 0)) errors.push(`שורה ${line}: מספר השעות הרצופות אינו תקין`);
+      if (!Number.isInteger(maxConsecutive) || maxConsecutive <= 0 || maxConsecutive > 7) errors.push(`שורה ${line}: המקסימום הרצוף חייב להיות בין 1 ל־7`);
+      if (basePeriods.some(item => item < 0 || item > meta.lastPeriod)) errors.push(`שורה ${line}: שעות ההוראה הקבועות אינן בטווח שהוגדר`);
       if (!name || !Number.isInteger(preferredQuota) || !Number.isInteger(quota) || !DAYS.includes(day) || !Number.isInteger(period) || !category) return;
       if (!grouped.has(name)) grouped.set(name, { name, quota, preferred_quota: preferredQuota, optional_quota: preferredQuota < quota, allowed_student_grades: allowedGrades.length ? allowedGrades : null, preferred_student_grades: preferredGrades, avoid_periods: avoidPeriods, forbidden_periods: [], max_consecutive: maxConsecutive, base_commitments: [], candidates: [] });
       const teacher = grouped.get(name);
@@ -163,6 +173,9 @@
       const existingSignature = JSON.stringify([teacher.quota, teacher.preferred_quota, teacher.allowed_student_grades || [], teacher.preferred_student_grades, teacher.avoid_periods, teacher.max_consecutive]);
       if (signature !== existingSignature) errors.push(`שורה ${line}: הגדרות המורה אינן אחידות אצל ${name}`);
       if (teacher.candidates.some(item => item.day === day && item.period === period)) errors.push(`שורה ${line}: האפשרות ${day} ${period} מופיעה פעמיים אצל ${name}`);
+      basePeriods.forEach(basePeriod => {
+        if (!teacher.base_commitments.some(item => item.day === day && item.period === basePeriod)) teacher.base_commitments.push({ day, period: basePeriod });
+      });
       teacher.candidates.push({ day, period, ...PERIOD_TIMES[period], category, replaces: category === "שעה פיקטיבית" ? "שעה שניתנת לדריסה" : null, avoid_if_possible: avoidPeriods.includes(period) });
     });
     return { items: [...grouped.values()], errors };
@@ -329,7 +342,7 @@
     });
     const studentSummary = students.map(student => {
       const lessons = byStudent.get(student.student) || [];
-      return { student: student.student, grade: student.grade, required: student.required, assigned: lessons.length, missing: student.required - lessons.length, same_teacher: new Set(lessons.map(item => item.teacher)).size <= 1, lessons };
+      return { student: student.student, grade: student.grade, required: student.required, shareWilling: student.shareWilling, assigned: lessons.length, missing: student.required - lessons.length, same_teacher: new Set(lessons.map(item => item.teacher)).size <= 1, lessons };
     });
     const teacherSummary = teachers.map(teacher => {
       const lessons = byTeacher.get(teacher.name) || [];
@@ -363,7 +376,7 @@
     if (!file) return;
     const text = await file.text();
     const meta = projectMeta();
-    const errors = headerErrors(text, STUDENT_HEADERS);
+    const errors = headerErrors(text, STUDENT_REQUIRED_HEADERS);
     const parsed = errors.length ? { items: [], errors } : readStudents(parseCsv(text), meta);
     state.students = parsed.items;
     state.studentErrors = parsed.errors;
@@ -377,7 +390,7 @@
     if (!file) return;
     const text = await file.text();
     const meta = projectMeta();
-    const errors = headerErrors(text, TEACHER_HEADERS);
+    const errors = headerErrors(text, TEACHER_REQUIRED_HEADERS);
     const parsed = errors.length ? { items: [], errors } : readTeachers(parseCsv(text), meta);
     state.teachers = parsed.items;
     state.teacherErrors = parsed.errors;
@@ -424,15 +437,15 @@
 
   function studentTemplate() {
     downloadCsv("תבנית-תלמידים.csv", STUDENT_HEADERS, [
-      ["תלמיד לדוגמה", "יא1", 2, "ראשון", 3, "חלון", "", ""],
-      ["תלמיד לדוגמה", "יא1", 2, "שלישי", 4, "שיעור במקצוע", "", ""]
+      ["תלמיד לדוגמה", "יא1", 2, "ראשון", 3, "חלון", "", "", "כן"],
+      ["תלמיד לדוגמה", "יא1", 2, "שלישי", 4, "שיעור במקצוע", "", "", "כן"]
     ]);
   }
 
   function teacherTemplate() {
     downloadCsv("תבנית-מורים.csv", TEACHER_HEADERS, [
-      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה פיקטיבית", "י;יא", "יא", "0;9", 6],
-      ["מורה לדוגמה", 1, 2, "שלישי", 4, "פנויה", "י;יא", "יא", "0;9", 6]
+      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה פיקטיבית", "י;יא", "יא", "0;9", 7, "1;2;4;5"],
+      ["מורה לדוגמה", 1, 2, "שלישי", 4, "פנויה", "י;יא", "יא", "0;9", 7, "1;2;3;5"]
     ]);
   }
 
@@ -448,7 +461,7 @@
       createdAt: new Date().toISOString(),
       meta,
       schedule,
-      studentAvailability: { schemaVersion: 2, status: "project", period_times: PERIOD_TIMES, students: state.students.map(student => ({ student: student.student, grade: student.grade, hebrew_entitlement: student.required, candidates: student.candidates })) },
+      studentAvailability: { schemaVersion: 2, status: "project", period_times: PERIOD_TIMES, students: state.students.map(student => ({ student: student.student, grade: student.grade, hebrew_entitlement: student.required, shareWilling: student.shareWilling, candidates: student.candidates })) },
       teacherAvailability: { schemaVersion: 2, status: "project", teachers: state.teachers }
     };
     localStorage.setItem(activeProjectKey, JSON.stringify(project));

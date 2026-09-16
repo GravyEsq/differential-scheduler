@@ -8,6 +8,7 @@
 *.json
 !package.json
 !package-lock.json
+!.openai/hosting.json
 
 private-data/
 data/

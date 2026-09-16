@@ -37,10 +37,14 @@
   const projectId = String(projectMeta.id || `${projectMeta.school || "school"}-${projectMeta.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
   const storageKey = `differential-project-${projectId}-assignments-v1`;
   const lockStorageKey = `differential-project-${projectId}-locks-v1`;
+  const constraintStorageKey = `differential-project-${projectId}-constraints-v1`;
+  const shareStorageKey = `differential-project-${projectId}-share-v1`;
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
   let activeLocks = loadSavedLocks();
+  let activeConstraints = loadSavedConstraints();
+  let shareWilling = loadShareWilling();
   let activeAssignmentId = null;
   let activeView = "schedule";
   let toastTimer = null;
@@ -73,6 +77,15 @@
     swapSuggestions: document.querySelector("#swapSuggestions"),
     locksDialog: document.querySelector("#locksDialog"),
     locksList: document.querySelector("#locksList"),
+    shareDialog: document.querySelector("#shareDialog"),
+    shareWillingList: document.querySelector("#shareWillingList"),
+    shareSuggestions: document.querySelector("#shareSuggestions"),
+    constraintsDialog: document.querySelector("#constraintsDialog"),
+    constraintsList: document.querySelector("#constraintsList"),
+    constraintType: document.querySelector("#constraintType"),
+    constraintPerson: document.querySelector("#constraintPerson"),
+    constraintDay: document.querySelector("#constraintDay"),
+    constraintPeriod: document.querySelector("#constraintPeriod"),
     toast: document.querySelector("#toast")
   };
 
@@ -110,6 +123,27 @@
     return { ...defaultLocks };
   }
 
+  function loadSavedConstraints() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(constraintStorageKey));
+      if (Array.isArray(saved)) return saved;
+    } catch (_) {
+      localStorage.removeItem(constraintStorageKey);
+    }
+    return Array.isArray(payload.constraints) ? payload.constraints : [];
+  }
+
+  function loadShareWilling() {
+    const defaults = { ...Object.fromEntries(draft.students.map(student => [student.student, Boolean(student.shareWilling || payload.studentAvailability.students.find(item => item.student === student.student)?.shareWilling)])), ...(payload.shareWilling || {}) };
+    try {
+      const saved = JSON.parse(localStorage.getItem(shareStorageKey));
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) return { ...defaults, ...saved };
+    } catch (_) {
+      localStorage.removeItem(shareStorageKey);
+    }
+    return defaults;
+  }
+
   function saveLocks() {
     localStorage.setItem(lockStorageKey, JSON.stringify(activeLocks));
   }
@@ -118,12 +152,23 @@
     localStorage.setItem(storageKey, JSON.stringify(assignments));
   }
 
+  function saveConstraints() {
+    localStorage.setItem(constraintStorageKey, JSON.stringify(activeConstraints));
+  }
+
+  function saveShareWilling() {
+    localStorage.setItem(shareStorageKey, JSON.stringify(shareWilling));
+  }
+
   function assignmentCounts() {
     const byStudent = new Map();
     const byTeacher = new Map();
+    const seenTeacherSlots = new Set();
     assignments.forEach(item => {
       byStudent.set(item.student, (byStudent.get(item.student) || 0) + 1);
-      byTeacher.set(item.teacher, (byTeacher.get(item.teacher) || 0) + 1);
+      const teacherSlot = `${item.teacher}|${item.day}|${item.period}`;
+      if (!seenTeacherSlots.has(teacherSlot)) byTeacher.set(item.teacher, (byTeacher.get(item.teacher) || 0) + 1);
+      seenTeacherSlots.add(teacherSlot);
     });
     return { byStudent, byTeacher };
   }
@@ -173,7 +218,8 @@
         const cards = lessons.map(item => {
           const gradeClass = item.grade.startsWith("יא") ? "" : "grade-yod";
           const edgeClass = item.student_slot_type.startsWith("קצה") ? "edge" : "";
-          return `<button class="lesson-card ${gradeClass} ${edgeClass}" data-assignment-id="${esc(item.id)}" type="button"><strong>${esc(item.student)}</strong><span>${esc(item.teacher)} · ${esc(item.grade)}</span></button>`;
+          const shared = item.groupId ? " · שעה משותפת" : "";
+          return `<button class="lesson-card ${gradeClass} ${edgeClass} ${item.groupId ? "shared" : ""}" data-assignment-id="${esc(item.id)}" type="button"><strong>${esc(item.student)}</strong><span>${esc(item.teacher)} · ${esc(item.grade)}${shared}</span></button>`;
         }).join("");
         cells.push(`<div class="grid-cell">${cards}</div>`);
       });
@@ -226,16 +272,23 @@
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`השעה של ${item.teacher} אינה פנויה לפי מערכת המורה`);
+      if (isConstrained("student", item.student, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.student} מתנגש באילוץ ידני`);
+      if (isConstrained("teacher", item.teacher, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.teacher} מתנגש באילוץ ידני`);
     });
     const studentSlotKeys = new Set();
-    const teacherSlotKeys = new Set();
+    const teacherSlots = new Map();
     assignments.forEach(item => {
       const studentKey = `${item.student}-${item.day}-${item.period}`;
       const teacherKey = `${item.teacher}-${item.day}-${item.period}`;
       if (studentSlotKeys.has(studentKey)) hardErrors.push(`התנגשות אצל ${item.student}`);
-      if (teacherSlotKeys.has(teacherKey)) hardErrors.push(`התנגשות אצל ${item.teacher}`);
       studentSlotKeys.add(studentKey);
-      teacherSlotKeys.add(teacherKey);
+      if (!teacherSlots.has(teacherKey)) teacherSlots.set(teacherKey, []);
+      teacherSlots.get(teacherKey).push(item);
+    });
+    teacherSlots.forEach((items, key) => {
+      if (items.length === 1) return;
+      const validShared = items.length === 2 && items.every(item => item.groupId && item.groupId === items[0].groupId && shareWilling[item.student]);
+      if (!validShared) hardErrors.push(`התנגשות אצל ${items[0].teacher} (${items[0].day}, שעה ${items[0].period})`);
     });
     Object.entries(activeLocks).forEach(([studentName, teacherName]) => {
       if (assignments.some(item => item.student === studentName && item.teacher !== teacherName)) {
@@ -243,11 +296,11 @@
       }
     });
     teacherData.forEach((teacher, teacherName) => {
-      if (!teacher.max_consecutive) return;
+      const limit = Math.min(7, teacher.max_consecutive || 7);
       days.forEach(day => {
         const periods = (teacher.base_commitments || []).filter(item => item.day === day).map(item => item.period);
         assignments.filter(item => item.teacher === teacherName && item.day === day).forEach(item => periods.push(item.period));
-        if (maxConsecutive(periods) > teacher.max_consecutive) hardErrors.push(`ל${teacherName} יש יותר מ-${teacher.max_consecutive} שעות רצופות ביום ${day}`);
+        if (maxConsecutive(periods) > limit) hardErrors.push(`ל${teacherName} יש יותר מ-${limit} שעות רצופות ביום ${day}`);
       });
     });
 
@@ -255,6 +308,8 @@
     if (splitStudents.length) warnings.push({ level: "warning", text: `${splitStudents.length} תלמידים מפוצלים בין מורות: ${splitStudents.map(item => item.student).join(", ")}` });
     if (late.length) warnings.push({ level: "warning", text: `${late.length} שיבוצים נמצאים בשעה 9` });
     if (edgeAssignments.length) warnings.push({ level: "warning", text: `${edgeAssignments.length} שיבוצים משתמשים בשעת קצה` });
+    const sharedGroups = new Set(assignments.filter(item => item.groupId).map(item => item.groupId));
+    if (sharedGroups.size) warnings.push({ level: "warning", text: `${sharedGroups.size} שעות משותפות לשני תלמידים` });
     Object.entries(defaultLocks).forEach(([studentName, teacherName]) => {
       if (!activeLocks[studentName]) warnings.push({ level: "warning", text: `הנעילה ${studentName} ← ${teacherName} משוחררת` });
     });
@@ -295,7 +350,7 @@
       const lessons = lessonsForStudent(student.student);
       const missing = Math.max(0, student.required - lessons.length);
       const lessonLines = lessons.length
-        ? lessons.map(item => `<button class="text-button lesson-line" data-assignment-id="${esc(item.id)}" type="button">${esc(item.day)}, שעה ${item.period} · ${esc(item.teacher)}</button>`).join("")
+        ? lessons.map(item => `<button class="text-button lesson-line" data-assignment-id="${esc(item.id)}" type="button">${esc(item.day)}, שעה ${item.period} · ${esc(item.teacher)}${item.groupId ? " · משותפת" : ""}</button>`).join("")
         : "—";
       return `<tr><td><strong>${esc(student.student)}</strong><br><small>${esc(student.grade)}</small></td><td>${student.required}</td><td>${lessonLines}<button class="inline-add-button" data-add-student="${esc(student.student)}" type="button">הוספת שעה</button></td><td><span class="status-badge ${missing ? "warning" : ""}">${missing ? `חסרה ${missing}` : "מלא"}</span></td></tr>`;
     }).join("");
@@ -307,7 +362,7 @@
     const cards = draft.teachers.filter(teacher => selected === "all" || teacher.teacher === selected).map(teacher => {
       const lessons = assignments.filter(item => item.teacher === teacher.teacher)
         .sort((a, b) => days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period);
-      const lines = lessons.map(item => `<li><strong>${esc(item.day)}, ${item.period}</strong> · ${esc(item.student)}</li>`).join("");
+      const lines = lessons.map(item => `<li><strong>${esc(item.day)}, ${item.period}</strong> · ${esc(item.student)}${item.groupId ? " · משותפת" : ""}</li>`).join("");
       const target = teacher.preferred_quota !== undefined && teacher.preferred_quota !== teacher.quota ? ` · יעד ${teacher.preferred_quota}` : "";
       return `<article class="teacher-card"><div class="teacher-card-head"><h3>${esc(teacher.teacher)}</h3><strong>${lessons.length}/${teacher.quota}${target}</strong></div><ul>${lines || "<li>אין שיבוצים</li>"}</ul></article>`;
     }).join("");
@@ -332,6 +387,10 @@
     return teacher.allowed_student_grades.includes(grade) || teacher.allowed_student_grades.includes(group);
   }
 
+  function isConstrained(type, name, day, period) {
+    return activeConstraints.some(item => item.type === type && item.name === name && item.day === day && item.period === period);
+  }
+
   function candidateForStudent(studentName, day, period) {
     return studentData.get(studentName)?.candidates.find(item => item.day === day && item.period === period) || null;
   }
@@ -340,6 +399,11 @@
     const rank = { "חלון": 0, "שיעור במקצוע": 1, "קצה לפני": 3, "קצה אחרי": 3, "דריסת שיעור": 5 };
     (projectMeta.aliases || []).forEach(alias => { rank[alias] = 1; });
     return (rank[candidate?.category] ?? 8) + (candidate?.period === 9 ? 20 : 0);
+  }
+
+  function teacherSlotQuality(candidate) {
+    const rank = { "חלון": 0, "פנויה": 1, "שעה פיקטיבית": 2, "קצה לפני": 4, "קצה אחרי": 4 };
+    return (rank[candidate?.category] ?? 6) + (candidate?.avoid_if_possible ? 8 : 0);
   }
 
   function buildSwapSuggestion(firstStudent, secondStudent) {
@@ -491,11 +555,12 @@
 
   function teacherConsecutiveOptionIsLegal(teacherName, day, period, currentId) {
     const teacher = teacherData.get(teacherName);
-    if (!teacher?.max_consecutive) return true;
+    if (!teacher) return false;
+    const limit = Math.min(7, teacher.max_consecutive || 7);
     const periods = (teacher.base_commitments || []).filter(item => item.day === day).map(item => item.period);
     assignments.filter(item => item.id !== currentId && item.teacher === teacherName && item.day === day).forEach(item => periods.push(item.period));
     periods.push(period);
-    return maxConsecutive(periods) <= teacher.max_consecutive;
+    return maxConsecutive(periods) <= limit;
   }
 
   function legalOptionsForStudent(studentName, currentAssignment = null) {
@@ -505,15 +570,18 @@
     const occupiedByStudent = new Set(assignments.filter(item => item.id !== currentId && item.student === studentName).map(item => `${item.day}-${item.period}`));
     const occupiedByTeacher = new Set(assignments.filter(item => item.id !== currentId).map(item => `${item.teacher}-${item.day}-${item.period}`));
     const teacherCounts = assignmentCounts().byTeacher;
-    if (currentAssignment) teacherCounts.set(currentAssignment.teacher, (teacherCounts.get(currentAssignment.teacher) || 1) - 1);
+    const currentSlotStillUsed = currentAssignment && assignments.some(item => item.id !== currentId && item.teacher === currentAssignment.teacher && item.day === currentAssignment.day && item.period === currentAssignment.period);
+    if (currentAssignment && !currentSlotStillUsed) teacherCounts.set(currentAssignment.teacher, (teacherCounts.get(currentAssignment.teacher) || 1) - 1);
     const options = [];
 
     student.candidates.forEach(studentSlot => {
       const slotKey = `${studentSlot.day}-${studentSlot.period}`;
       if (occupiedByStudent.has(slotKey)) return;
+      if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
       teacherData.forEach((teacher, teacherName) => {
         if (!teacherAllows(teacherName, studentName)) return;
         if (teacher.forbidden_periods.includes(studentSlot.period)) return;
+        if (isConstrained("teacher", teacherName, studentSlot.day, studentSlot.period)) return;
         const teacherSlot = teacher.candidates.find(item => item.day === studentSlot.day && item.period === studentSlot.period);
         if (!teacherSlot) return;
         if (occupiedByTeacher.has(`${teacherName}-${slotKey}`)) return;
@@ -534,12 +602,13 @@
           replaces_for_teacher: teacherSlot.replaces,
           replaces_student_lesson: studentSlot.replaces_student_lesson || null,
           avoid_if_possible: Boolean(studentSlot.avoid_if_possible),
+          quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot),
           same,
           createsSplit
         });
       });
     });
-    return options.sort((a, b) => Number(b.same) - Number(a.same) || Number(a.period === 9) - Number(b.period === 9) || days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period || a.teacher.localeCompare(b.teacher, "he"));
+    return options.sort((a, b) => Number(b.same) - Number(a.same) || a.quality - b.quality || days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period || a.teacher.localeCompare(b.teacher, "he"));
   }
 
   function legalAlternatives(assignment) {
@@ -583,6 +652,9 @@
     if (!option) return;
     const current = assignments.find(item => item.id === activeAssignmentId);
     const warnings = optionWarnings(option, current);
+    const alternatives = (elements.alternativeSelect._options || []).filter(item => !item.same);
+    const best = alternatives.reduce((result, item) => !result || item.quality < result.quality ? item : result, null);
+    if (!option.same && best && option.quality > best.quality) warnings.unshift(`קיימת חלופה עדיפה: ${optionLabel(best)}`);
     elements.dialogNote.textContent = warnings.length
       ? `לתשומת לבך: ${warnings.join("; ")}.`
       : "האפשרות עומדת באילוצים ואינה מוסיפה חריגה.";
@@ -593,7 +665,7 @@
     if (!assignment) return;
     activeAssignmentId = assignmentId;
     elements.dialogStudent.textContent = assignment.student;
-    elements.dialogCurrent.innerHTML = `<strong>השיבוץ הנוכחי:</strong> ${esc(assignment.day)}, שעה ${assignment.period} (${esc(assignment.start)}–${esc(assignment.end)}) אצל ${esc(assignment.teacher)}.`;
+    elements.dialogCurrent.innerHTML = `<strong>השיבוץ הנוכחי:</strong> ${esc(assignment.day)}, שעה ${assignment.period} (${esc(assignment.start)}–${esc(assignment.end)}) אצל ${esc(assignment.teacher)}.${assignment.groupId ? " <strong>זוהי שעה משותפת; העברה תפריד את הצמד.</strong>" : ""}`;
     const options = legalAlternatives(assignment);
     elements.alternativeSelect.innerHTML = options.map((option, index) => `<option value="${index}">${esc(optionLabel(option))}</option>`).join("");
     elements.alternativeSelect._options = options;
@@ -607,6 +679,7 @@
     const assignment = assignments.find(item => item.id === activeAssignmentId);
     const option = elements.alternativeSelect._options?.[Number(elements.alternativeSelect.value)];
     if (!assignment || !option) return;
+    if (assignment.groupId && !option.same) dissolveSharedGroup(assignment.groupId);
     Object.assign(assignment, option);
     saveAssignments();
     elements.dialog.close();
@@ -654,6 +727,8 @@
     const option = elements.addOptionSelect._options?.[Number(elements.addOptionSelect.value)];
     if (!student || !option) return;
     const warnings = optionWarnings(option, null, studentName);
+    const best = (elements.addOptionSelect._options || [])[0];
+    if (best && option.quality > best.quality) warnings.unshift(`קיימת חלופה עדיפה: ${optionLabel(best)}`);
     const assigned = lessonsForStudent(studentName).length;
     if (assigned >= student.required) warnings.unshift("הוספת השעה תיצור שיבוץ מעבר לזכאות הרשומה");
     elements.addDialogNote.textContent = warnings.length
@@ -697,12 +772,134 @@
     const shortage = Math.max(0, (student?.required || 0) - remaining);
     const warning = shortage ? ` לאחר ההסרה יחסרו לתלמיד/ה ${shortage} שעות.` : "";
     if (!confirm(`להסיר את השיבוץ של ${assignment.student} ביום ${assignment.day}, שעה ${assignment.period}, אצל ${assignment.teacher}?${warning}`)) return;
+    const formerGroupId = assignment.groupId;
     assignments = assignments.filter(item => item.id !== activeAssignmentId);
+    if (formerGroupId) dissolveSharedGroup(formerGroupId);
     activeAssignmentId = null;
     saveAssignments();
     elements.dialog.close();
     renderAll();
     showToast("השעה הוסרה. המערכת מציגה כעת את החוסר שנוצר.");
+  }
+
+  function dissolveSharedGroup(groupId) {
+    assignments.forEach(item => {
+      if (item.groupId === groupId) delete item.groupId;
+    });
+  }
+
+  function openShareDialog() {
+    elements.shareWillingList.innerHTML = draft.students
+      .slice()
+      .sort((a, b) => a.student.localeCompare(b.student, "he"))
+      .map(student => `<label class="share-toggle"><input type="checkbox" data-share-student="${esc(student.student)}" ${shareWilling[student.student] ? "checked" : ""}><span><strong>${esc(student.student)}</strong><small>${esc(student.grade)}</small></span></label>`)
+      .join("");
+    renderShareSuggestions();
+    elements.shareDialog.showModal();
+  }
+
+  function commitShareWilling() {
+    const next = {};
+    elements.shareWillingList.querySelectorAll("[data-share-student]").forEach(input => { next[input.dataset.shareStudent] = input.checked; });
+    shareWilling = next;
+    saveShareWilling();
+    renderShareSuggestions();
+    renderAll();
+    showToast("העדפות השיתוף נשמרו.");
+  }
+
+  function findShareSuggestions() {
+    const missing = new Set(missingStudents().map(item => item.student));
+    const occupiedStudents = new Set(assignments.map(item => `${item.student}|${item.day}|${item.period}`));
+    const suggestions = [];
+    assignments.filter(item => !item.groupId && shareWilling[item.student]).forEach(host => {
+      draft.students.forEach(student => {
+        if (student.student === host.student || !shareWilling[student.student] || !missing.has(student.student)) return;
+        if (occupiedStudents.has(`${student.student}|${host.day}|${host.period}`)) return;
+        if (!teacherAllows(host.teacher, student.student)) return;
+        if (isConstrained("student", student.student, host.day, host.period) || isConstrained("teacher", host.teacher, host.day, host.period)) return;
+        const candidate = candidateForStudent(student.student, host.day, host.period);
+        if (!candidate) return;
+        suggestions.push({ host, partner: student, candidate, quality: candidateQuality(candidate) });
+      });
+    });
+    return suggestions.sort((a, b) => a.quality - b.quality || days.indexOf(a.host.day) - days.indexOf(b.host.day) || a.host.period - b.host.period || a.partner.student.localeCompare(b.partner.student, "he")).slice(0, 30);
+  }
+
+  function renderShareSuggestions() {
+    const suggestions = findShareSuggestions();
+    elements.shareSuggestions._items = suggestions;
+    elements.shareSuggestions.innerHTML = suggestions.length ? suggestions.map((item, index) => {
+      const note = item.candidate.category === "חלון" ? "סוגר חלון" : item.candidate.category === "שיעור במקצוע" ? "בזמן שיעור המקצוע" : `שעת ${item.candidate.category}`;
+      return `<article class="share-card"><div><strong>${esc(item.host.student)} + ${esc(item.partner.student)}</strong><span>${esc(item.host.teacher)} · ${esc(item.host.day)}, שעה ${item.host.period} · ${esc(note)}</span></div><button class="primary-button" data-share-index="${index}" type="button">אישור השיבוץ</button></article>`;
+    }).join("") : `<div class="swap-empty"><strong>אין כרגע הצעה לשעה משותפת.</strong><br>יש לסמן לפחות שני תלמידים, ולאחד מהם צריכה להיות שעה חסרה שמתאימה לשיבוץ קיים של האחר.</div>`;
+  }
+
+  function applyShareSuggestion(suggestion) {
+    if (!suggestion) return;
+    const { host, partner, candidate } = suggestion;
+    if (!confirm(`לשבץ את ${host.student} ואת ${partner.student} יחד אצל ${host.teacher}, ביום ${host.day} בשעה ${host.period}?`)) return;
+    const liveHost = assignments.find(item => item.id === host.id && !item.groupId);
+    if (!liveHost) return showToast("השיבוץ השתנה. יש לרענן את ההצעות.");
+    const groupId = `shared-${Date.now()}`;
+    liveHost.groupId = groupId;
+    assignments.push({
+      id: `manual-${Date.now()}-${assignments.length + 1}`,
+      groupId,
+      student: partner.student,
+      grade: partner.grade,
+      teacher: host.teacher,
+      day: host.day,
+      period: host.period,
+      start: candidate.start,
+      end: candidate.end,
+      student_slot_type: candidate.category,
+      teacher_slot_type: host.teacher_slot_type,
+      replaces_for_teacher: host.replaces_for_teacher || null,
+      replaces_student_lesson: candidate.replaces_student_lesson || null,
+      avoid_if_possible: Boolean(candidate.avoid_if_possible)
+    });
+    saveAssignments();
+    renderShareSuggestions();
+    renderAll();
+    showToast("השעה המשותפת נוספה לאחר אישור.");
+  }
+
+  function refreshConstraintPeople() {
+    const items = elements.constraintType.value === "student"
+      ? draft.students.map(item => item.student)
+      : draft.teachers.map(item => item.teacher);
+    elements.constraintPerson.innerHTML = items.sort((a, b) => a.localeCompare(b, "he")).map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
+  }
+
+  function renderConstraints() {
+    elements.constraintsList.innerHTML = activeConstraints.length ? activeConstraints.map((item, index) => `<div class="constraint-row"><span><strong>${item.type === "student" ? "תלמיד/ה" : "מורה"}: ${esc(item.name)}</strong><small>${esc(item.day)}, שעה ${item.period}</small></span><button class="danger-button" data-remove-constraint="${index}" type="button">הסרה</button></div>`).join("") : `<p class="swap-empty">לא הוגדרו אילוצים ידניים.</p>`;
+  }
+
+  function openConstraintsDialog() {
+    elements.constraintDay.innerHTML = days.map(day => `<option value="${day}">${day}</option>`).join("");
+    elements.constraintPeriod.innerHTML = Object.keys(times).map(period => `<option value="${period}">שעה ${period} · ${times[period]}</option>`).join("");
+    refreshConstraintPeople();
+    renderConstraints();
+    elements.constraintsDialog.showModal();
+  }
+
+  function addConstraint() {
+    const item = { type: elements.constraintType.value, name: elements.constraintPerson.value, day: elements.constraintDay.value, period: Number(elements.constraintPeriod.value) };
+    if (!item.name) return;
+    if (!activeConstraints.some(existing => JSON.stringify(existing) === JSON.stringify(item))) activeConstraints.push(item);
+    saveConstraints();
+    renderConstraints();
+    renderAll();
+    showToast("האילוץ נוסף ונכלל בבדיקת השיבוצים.");
+  }
+
+  function removeConstraint(index) {
+    activeConstraints.splice(index, 1);
+    saveConstraints();
+    renderConstraints();
+    renderAll();
+    showToast("האילוץ הוסר.");
   }
 
   function renderAll() {
@@ -730,7 +927,7 @@
       const lessons = lessonsForStudent(student.student);
       const missing = Math.max(0, student.required - lessons.length);
       const lessonText = lessons.length
-        ? lessons.map(item => `${item.day}, שעה ${item.period} (${item.start}–${item.end}) — ${item.teacher}`).join("<br>")
+        ? lessons.map(item => `${esc(item.day)}, שעה ${item.period} (${esc(item.start)}–${esc(item.end)}) — ${esc(item.teacher)}${item.groupId ? " · משותפת" : ""}`).join("<br>")
         : "לא שובץ";
       return `<tr><td><strong>${esc(student.student)}</strong></td><td>${esc(student.grade)}</td><td>${student.required}</td><td>${lessonText}</td><td class="${missing ? "problem" : "ok"}">${missing ? `חסרה ${missing}` : "מלא"}</td></tr>`;
     }).join("");
@@ -754,6 +951,8 @@
       metrics: currentMetrics(),
       assignments,
       locks: activeLocks,
+      constraints: activeConstraints,
+      shareWilling,
       missingStudents: missingStudents().map(student => ({ student: student.student, missing: student.missingNow }))
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -810,8 +1009,12 @@
       if (!shouldReplace) return;
       assignments = importedAssignments;
       activeLocks = importedLocks;
+      activeConstraints = Array.isArray(parsed.constraints) ? parsed.constraints : [];
+      shareWilling = parsed.shareWilling && typeof parsed.shareWilling === "object" ? parsed.shareWilling : loadShareWilling();
       saveAssignments();
       saveLocks();
+      saveConstraints();
+      saveShareWilling();
       renderAll();
       const issues = scheduleWarnings().filter(item => item.level !== "ok").length;
       showToast(issues ? `הגיבוי נטען. נמצאו ${issues} התראות לבדיקה.` : "הגיבוי נטען בהצלחה ולא נמצאו בעיות.");
@@ -824,8 +1027,12 @@
     if (!confirm("לאפס את כל השינויים המקומיים ולחזור לטיוטה המקורית?")) return;
     assignments = originalAssignments.map(item => ({ ...item }));
     activeLocks = { ...defaultLocks };
+    activeConstraints = [];
+    shareWilling = Object.fromEntries(draft.students.map(student => [student.student, Boolean(student.shareWilling)]));
     localStorage.removeItem(storageKey);
     localStorage.removeItem(lockStorageKey);
+    localStorage.removeItem(constraintStorageKey);
+    localStorage.removeItem(shareStorageKey);
     renderAll();
     showToast("השינויים המקומיים אופסו.");
   }
@@ -920,6 +1127,19 @@
   });
   document.querySelector("#locksButton").addEventListener("click", openLocksDialog);
   document.querySelector("#saveLocksButton").addEventListener("click", commitLocks);
+  document.querySelector("#shareButton").addEventListener("click", openShareDialog);
+  document.querySelector("#saveShareWillingButton").addEventListener("click", commitShareWilling);
+  elements.shareSuggestions.addEventListener("click", event => {
+    const button = event.target.closest("[data-share-index]");
+    if (button) applyShareSuggestion(elements.shareSuggestions._items?.[Number(button.dataset.shareIndex)]);
+  });
+  document.querySelector("#constraintsButton").addEventListener("click", openConstraintsDialog);
+  elements.constraintType.addEventListener("change", refreshConstraintPeople);
+  document.querySelector("#addConstraintButton").addEventListener("click", addConstraint);
+  elements.constraintsList.addEventListener("click", event => {
+    const button = event.target.closest("[data-remove-constraint]");
+    if (button) removeConstraint(Number(button.dataset.removeConstraint));
+  });
   document.querySelector("#reportButton").addEventListener("click", openDeputyReport);
   document.querySelector("#exportButton").addEventListener("click", exportDraft);
   const importFile = document.querySelector("#importFile");

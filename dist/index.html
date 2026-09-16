@@ -97,6 +97,8 @@
           <div class="side-actions">
             <button id="manualButton" class="primary-button" type="button">הוספת שעה ידנית</button>
             <button id="swapButton" class="secondary-button swap-launch" type="button">הצעת החלפה בין מורים</button>
+            <button id="shareButton" class="secondary-button share-launch" type="button">שעה משותפת לשני תלמידים</button>
+            <button id="constraintsButton" class="secondary-button" type="button">אילוצי זמינות</button>
             <button id="locksButton" class="secondary-button" type="button">ניהול נעילות</button>
             <button id="reportButton" class="primary-button" type="button">דו״ח מסכם לסגנית</button>
             <button id="exportButton" class="secondary-button" type="button">גיבוי הטיוטה</button>
@@ -184,6 +186,42 @@
           <button id="saveLocksButton" class="primary-button" type="button">שמירת הנעילות</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="shareDialog" class="edit-dialog share-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">חריג מאושר</p><h2>שעה משותפת לשני תלמידים</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <p class="locks-intro">סמנו מי מסכימ/ה לשעה משותפת. המערכת תציע רק צמדים ששניהם מסומנים ושעומדים באילוצי הזמינות.</p>
+        <div id="shareWillingList" class="share-willing-list"></div>
+        <div class="share-suggestions-head"><h3>הצעות לשיתוף</h3><span>נדרש אישור לפני שיבוץ</span></div>
+        <div id="shareSuggestions" class="swap-suggestions" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button id="saveShareWillingButton" class="primary-button" type="button">שמירת הסימונים ורענון הצעות</button>
+          <button class="secondary-button" value="cancel">סגירה</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="constraintsDialog" class="edit-dialog constraints-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">עריכה ידנית</p><h2>אילוצי זמינות</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <p class="locks-intro">הוסיפו חסימה נקודתית. שיבוץ קיים לא יימחק אוטומטית, אך יסומן כבעיה עד שתטפלו בו.</p>
+        <div class="constraint-form">
+          <label><span>סוג</span><select id="constraintType"><option value="student">תלמיד/ה</option><option value="teacher">מורה</option></select></label>
+          <label><span>שם</span><select id="constraintPerson"></select></label>
+          <label><span>יום</span><select id="constraintDay"></select></label>
+          <label><span>שעה</span><select id="constraintPeriod"></select></label>
+          <button id="addConstraintButton" class="primary-button" type="button">הוספת אילוץ</button>
+        </div>
+        <div id="constraintsList" class="constraints-list"></div>
+        <div class="dialog-actions"><button class="secondary-button" value="cancel">סגירה</button></div>
       </form>
     </dialog>
 

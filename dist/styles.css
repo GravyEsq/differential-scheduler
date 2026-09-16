@@ -121,6 +121,7 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
 .lesson-card span { display: block; margin-top: 3px; color: #51617b; font-size: .74rem; }
 .lesson-card.grade-yod { border-color: var(--teal); background: #eaf8f5; }
 .lesson-card.edge { border-color: var(--amber); background: #fff6e7; }
+.lesson-card.shared { box-shadow: inset 0 0 0 2px rgba(120, 70, 160, .22); }
 
 .side-panel { overflow: hidden; }
 .side-heading { padding: 18px; display: flex; gap: 12px; border-bottom: 1px solid var(--line); }
@@ -149,6 +150,7 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
 .validation-item.error::before { content: "×"; }
 .side-actions { padding: 0 14px 16px; display: grid; gap: 4px; }
 .swap-launch { border-color: #2d6b68; color: #175d59; background: #edf8f6; }
+.share-launch { border-color: #76529b; color: #623e88; background: #f6f0fb; }
 
 .primary-button, .secondary-button, .danger-button, .text-button, .close-button { border-radius: 8px; cursor: pointer; }
 .primary-button { padding: 10px 16px; color: white; background: var(--blue); border: 1px solid var(--blue); font-weight: 700; }
@@ -216,6 +218,28 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
 .lock-toggle input::after { content: ""; width: 17px; height: 17px; position: absolute; top: 3px; right: 3px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(23,36,58,.25); transition: transform .18s ease; }
 .lock-toggle input:checked { background: var(--teal); }
 .lock-toggle input:checked::after { transform: translateX(-19px); }
+.share-dialog { width: min(760px, calc(100vw - 28px)); }
+.share-willing-list { max-height: 210px; padding: 14px 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow-y: auto; border-bottom: 1px solid var(--line); }
+.share-toggle { min-width: 0; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfe; cursor: pointer; }
+.share-toggle input { width: 18px; min-width: 18px; height: 18px; }
+.share-toggle span { min-width: 0; }
+.share-toggle strong, .share-toggle small { display: block; }
+.share-toggle small { margin-top: 2px; color: var(--muted); }
+.share-suggestions-head { padding: 14px 22px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.share-suggestions-head h3 { margin: 0; font-size: .98rem; }
+.share-suggestions-head span { color: var(--muted); font-size: .78rem; }
+.share-card { margin-bottom: 9px; padding: 12px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfe; }
+.share-card strong, .share-card span { display: block; }
+.share-card span { margin-top: 4px; color: var(--muted); font-size: .8rem; }
+.constraints-dialog { width: min(720px, calc(100vw - 28px)); }
+.constraint-form { padding: 2px 22px 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; border-bottom: 1px solid var(--line); }
+.constraint-form label { display: grid; gap: 6px; color: var(--muted); font-size: .8rem; font-weight: 700; }
+.constraint-form select { width: 100%; min-width: 0; }
+.constraint-form button { align-self: end; }
+.constraints-list { max-height: 280px; padding: 14px 22px 2px; overflow-y: auto; }
+.constraint-row { margin-bottom: 8px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 9px; }
+.constraint-row strong, .constraint-row small { display: block; }
+.constraint-row small { margin-top: 4px; color: var(--muted); }
 .toast { position: fixed; inset-inline-start: 22px; bottom: 22px; z-index: 20; max-width: min(390px, calc(100vw - 44px)); padding: 12px 16px; color: white; background: #17395f; border-radius: 9px; box-shadow: 0 10px 26px rgba(23,57,95,.25); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .2s ease; }
 .toast.show { opacity: 1; transform: translateY(0); }
 
@@ -245,6 +269,8 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
   .data-table { min-width: 680px; }
   #studentsView { overflow-x: auto; }
   .swap-route { grid-template-columns: 1fr; }
+  .share-willing-list, .constraint-form { grid-template-columns: 1fr; }
+  .share-card { align-items: stretch; flex-direction: column; }
 }
 
 /* Project setup */
