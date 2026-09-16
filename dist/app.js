@@ -39,15 +39,18 @@
   const lockStorageKey = `differential-project-${projectId}-locks-v1`;
   const constraintStorageKey = `differential-project-${projectId}-constraints-v1`;
   const shareStorageKey = `differential-project-${projectId}-share-v1`;
+  const historyStorageKey = `differential-project-${projectId}-history-v1`;
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
   let activeLocks = loadSavedLocks();
   let activeConstraints = loadSavedConstraints();
   let shareWilling = loadShareWilling();
+  let undoHistory = loadUndoHistory();
   let activeAssignmentId = null;
   let activeView = "schedule";
   let toastTimer = null;
+  let saveStateTimer = null;
 
   const elements = {
     teacherFilter: document.querySelector("#teacherFilter"),
@@ -86,6 +89,14 @@
     constraintPerson: document.querySelector("#constraintPerson"),
     constraintDay: document.querySelector("#constraintDay"),
     constraintPeriod: document.querySelector("#constraintPeriod"),
+    nextActionPanel: document.querySelector("#nextActionPanel"),
+    nextActionTitle: document.querySelector("#nextActionTitle"),
+    nextActionDescription: document.querySelector("#nextActionDescription"),
+    nextActionButton: document.querySelector("#nextActionButton"),
+    reviewWarningsButton: document.querySelector("#reviewWarningsButton"),
+    undoButton: document.querySelector("#undoButton"),
+    saveStateText: document.querySelector("#saveStateText"),
+    attentionPanel: document.querySelector("#attentionPanel"),
     toast: document.querySelector("#toast")
   };
 
@@ -144,20 +155,81 @@
     return defaults;
   }
 
+  function loadUndoHistory() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(historyStorageKey));
+      if (Array.isArray(saved)) return saved.slice(-20);
+    } catch (_) {
+      sessionStorage.removeItem(historyStorageKey);
+    }
+    return [];
+  }
+
+  function currentSnapshot(label) {
+    return {
+      label,
+      assignments: structuredClone(assignments),
+      locks: structuredClone(activeLocks),
+      constraints: structuredClone(activeConstraints),
+      shareWilling: structuredClone(shareWilling)
+    };
+  }
+
+  function captureUndo(label) {
+    undoHistory.push(currentSnapshot(label));
+    undoHistory = undoHistory.slice(-20);
+    sessionStorage.setItem(historyStorageKey, JSON.stringify(undoHistory));
+    updateUndoButton();
+  }
+
+  function updateUndoButton() {
+    const last = undoHistory.at(-1);
+    elements.undoButton.disabled = !last;
+    elements.undoButton.textContent = last ? `ביטול: ${last.label}` : "ביטול פעולה אחרונה";
+  }
+
+  function undoLastAction() {
+    const snapshot = undoHistory.pop();
+    if (!snapshot) return;
+    assignments = snapshot.assignments;
+    activeLocks = snapshot.locks;
+    activeConstraints = snapshot.constraints;
+    shareWilling = snapshot.shareWilling;
+    sessionStorage.setItem(historyStorageKey, JSON.stringify(undoHistory));
+    saveAssignments();
+    saveLocks();
+    saveConstraints();
+    saveShareWilling();
+    updateUndoButton();
+    renderAll();
+    showToast(`הפעולה „${snapshot.label}” בוטלה.`);
+  }
+
+  function markSaved() {
+    if (!elements.saveStateText) return;
+    clearTimeout(saveStateTimer);
+    elements.saveStateText.textContent = "השינויים נשמרו כעת במכשיר זה";
+    saveStateTimer = setTimeout(() => { elements.saveStateText.textContent = "כל השינויים נשמרו במכשיר זה"; }, 3000);
+  }
+
   function saveLocks() {
     localStorage.setItem(lockStorageKey, JSON.stringify(activeLocks));
+    markSaved();
   }
 
   function saveAssignments() {
     localStorage.setItem(storageKey, JSON.stringify(assignments));
+    markSaved();
   }
 
   function saveConstraints() {
     localStorage.setItem(constraintStorageKey, JSON.stringify(activeConstraints));
+    markSaved();
   }
 
   function saveShareWilling() {
     localStorage.setItem(shareStorageKey, JSON.stringify(shareWilling));
+    markSaved();
   }
 
   function assignmentCounts() {
@@ -505,6 +577,7 @@
     if (!suggestion) return;
     const approved = confirm(`להחליף את כל השעות בין ${suggestion.firstStudent} לבין ${suggestion.secondStudent}?`);
     if (!approved) return;
+    captureUndo("החלפת שיבוצים");
     const firstIds = new Set(suggestion.firstLessonIds);
     const secondIds = new Set(suggestion.secondLessonIds);
     assignments = assignments.map(item => {
@@ -533,6 +606,12 @@
       if (input.checked) nextLocks[studentName] = defaultLocks[studentName];
     });
     const releasedCount = Object.keys(defaultLocks).length - Object.keys(nextLocks).length;
+    if (JSON.stringify(nextLocks) === JSON.stringify(activeLocks)) {
+      elements.locksDialog.close();
+      showToast("לא בוצעו שינויים בשיוכים הקבועים.");
+      return;
+    }
+    captureUndo("עדכון שיוכים קבועים");
     activeLocks = nextLocks;
     saveLocks();
     elements.locksDialog.close();
@@ -679,6 +758,12 @@
     const assignment = assignments.find(item => item.id === activeAssignmentId);
     const option = elements.alternativeSelect._options?.[Number(elements.alternativeSelect.value)];
     if (!assignment || !option) return;
+    if (option.same) {
+      elements.dialog.close();
+      showToast("השיבוץ נשאר ללא שינוי.");
+      return;
+    }
+    captureUndo("עדכון שיבוץ");
     if (assignment.groupId && !option.same) dissolveSharedGroup(assignment.groupId);
     Object.assign(assignment, option);
     saveAssignments();
@@ -743,6 +828,7 @@
     if (!student || !option) return;
     const assigned = lessonsForStudent(studentName).length;
     if (assigned >= student.required && !confirm(`${studentName} כבר קיבל/ה את מלוא הזכאות. להוסיף שעה עודפת בכל זאת?`)) return;
+    captureUndo("יצירת שיבוץ");
     assignments.push({
       id: `manual-${Date.now()}-${assignments.length + 1}`,
       student: studentName,
@@ -772,6 +858,7 @@
     const shortage = Math.max(0, (student?.required || 0) - remaining);
     const warning = shortage ? ` לאחר ההסרה יחסרו לתלמיד/ה ${shortage} שעות.` : "";
     if (!confirm(`להסיר את השיבוץ של ${assignment.student} ביום ${assignment.day}, שעה ${assignment.period}, אצל ${assignment.teacher}?${warning}`)) return;
+    captureUndo("ביטול שיבוץ");
     const formerGroupId = assignment.groupId;
     assignments = assignments.filter(item => item.id !== activeAssignmentId);
     if (formerGroupId) dissolveSharedGroup(formerGroupId);
@@ -801,6 +888,11 @@
   function commitShareWilling() {
     const next = {};
     elements.shareWillingList.querySelectorAll("[data-share-student]").forEach(input => { next[input.dataset.shareStudent] = input.checked; });
+    if (JSON.stringify(next) === JSON.stringify(shareWilling)) {
+      showToast("לא בוצעו שינויים בהעדפות השיבוץ הזוגי.");
+      return;
+    }
+    captureUndo("עדכון העדפות שיבוץ זוגי");
     shareWilling = next;
     saveShareWilling();
     renderShareSuggestions();
@@ -841,6 +933,7 @@
     if (!confirm(`לשבץ את ${host.student} ואת ${partner.student} יחד אצל ${host.teacher}, ביום ${host.day} בשעה ${host.period}?`)) return;
     const liveHost = assignments.find(item => item.id === host.id && !item.groupId);
     if (!liveHost) return showToast("השיבוץ השתנה. יש לרענן את ההצעות.");
+    captureUndo("יצירת שיבוץ זוגי");
     const groupId = `shared-${Date.now()}`;
     liveHost.groupId = groupId;
     assignments.push({
@@ -887,7 +980,12 @@
   function addConstraint() {
     const item = { type: elements.constraintType.value, name: elements.constraintPerson.value, day: elements.constraintDay.value, period: Number(elements.constraintPeriod.value) };
     if (!item.name) return;
-    if (!activeConstraints.some(existing => JSON.stringify(existing) === JSON.stringify(item))) activeConstraints.push(item);
+    if (activeConstraints.some(existing => JSON.stringify(existing) === JSON.stringify(item))) {
+      showToast("האילוץ כבר קיים.");
+      return;
+    }
+    captureUndo("הוספת אילוץ");
+    activeConstraints.push(item);
     saveConstraints();
     renderConstraints();
     renderAll();
@@ -895,6 +993,8 @@
   }
 
   function removeConstraint(index) {
+    if (!activeConstraints[index]) return;
+    captureUndo("הסרת אילוץ");
     activeConstraints.splice(index, 1);
     saveConstraints();
     renderConstraints();
@@ -902,10 +1002,59 @@
     showToast("האילוץ הוסר.");
   }
 
+  function renderNextAction() {
+    if (isEmptyProject) {
+      elements.nextActionPanel.hidden = true;
+      return;
+    }
+    const missing = missingStudents();
+    const warningCount = scheduleWarnings().filter(item => item.level !== "ok").length;
+    elements.nextActionPanel.hidden = false;
+    elements.reviewWarningsButton.hidden = warningCount === 0;
+    elements.reviewWarningsButton.textContent = warningCount ? `הצגת ${warningCount} נושאים לבדיקה` : "הצגת נושאים לבדיקה";
+    if (missing.length) {
+      const missingHours = missing.reduce((sum, item) => sum + item.missingNow, 0);
+      elements.nextActionTitle.textContent = `נותרו ${missingHours} שעות זכאות לשיבוץ`;
+      elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. המערכת תפתח את התלמיד או התלמידה הראשונים שדורשים טיפול.`;
+      elements.nextActionButton.textContent = "טיפול בשעות החסרות";
+      elements.nextActionButton.dataset.action = "missing";
+      return;
+    }
+    if (warningCount) {
+      elements.nextActionTitle.textContent = "כל שעות הזכאות שובצו";
+      elements.nextActionDescription.textContent = `לפני הפקת הדו״ח מומלץ לעבור על ${warningCount} הנושאים שמסומנים לבדיקה.`;
+      elements.nextActionButton.textContent = "מעבר לנושאים לבדיקה";
+      elements.nextActionButton.dataset.action = "warnings";
+      return;
+    }
+    elements.nextActionTitle.textContent = "השיבוץ הושלם ונבדק";
+    elements.nextActionDescription.textContent = "כל שעות הזכאות שובצו ולא נמצאו התראות. אפשר להפיק דו״ח מסכם.";
+    elements.nextActionButton.textContent = "הפקת דו״ח";
+    elements.nextActionButton.dataset.action = "report";
+  }
+
+  function focusAttentionPanel() {
+    elements.attentionPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    elements.attentionPanel.focus({ preventScroll: true });
+  }
+
+  function handleNextAction() {
+    const action = elements.nextActionButton.dataset.action;
+    if (action === "missing") {
+      const [first] = missingStudents();
+      if (first) openAddDialog(first.student);
+      return;
+    }
+    if (action === "warnings") return focusAttentionPanel();
+    if (action === "report") openDeputyReport();
+  }
+
   function renderAll() {
     renderSummary();
     renderSidebar();
     renderActiveView();
+    renderNextAction();
+    updateUndoButton();
   }
 
   function showToast(message) {
@@ -1007,6 +1156,7 @@
       const importedLocks = locksFromBackup(parsed);
       const shouldReplace = confirm(`קובץ הפרויקט כולל ${importedAssignments.length} שיבוצים. לטעון אותו במקום הגרסה הנוכחית?`);
       if (!shouldReplace) return;
+      captureUndo("ייבוא פרויקט");
       assignments = importedAssignments;
       activeLocks = importedLocks;
       activeConstraints = Array.isArray(parsed.constraints) ? parsed.constraints : [];
@@ -1025,6 +1175,7 @@
 
   function resetLocalChanges() {
     if (!confirm("לשחזר את הגרסה הראשונית ולבטל את כל השינויים המקומיים?")) return;
+    captureUndo("שחזור גרסה ראשונית");
     assignments = originalAssignments.map(item => ({ ...item }));
     activeLocks = { ...defaultLocks };
     activeConstraints = [];
@@ -1151,6 +1302,9 @@
     importFile.value = "";
   });
   document.querySelector("#resetButton").addEventListener("click", resetLocalChanges);
+  elements.undoButton.addEventListener("click", undoLastAction);
+  elements.nextActionButton.addEventListener("click", handleNextAction);
+  elements.reviewWarningsButton.addEventListener("click", focusAttentionPanel);
 
   renderAll();
   registerWebMcpTools();

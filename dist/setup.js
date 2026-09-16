@@ -383,7 +383,9 @@
     state.students = parsed.items;
     state.studentErrors = parsed.errors;
     elements.studentStatus.className = `file-status ${parsed.errors.length ? "error" : "ok"}`;
-    elements.studentStatus.textContent = parsed.errors.length ? `${file.name}: נמצאו ${parsed.errors.length} בעיות.` : `${file.name}: נקלטו ${parsed.items.length} תלמידים.`;
+    elements.studentStatus.textContent = parsed.errors.length
+      ? `${file.name}: ${parsed.errors[0]}${parsed.errors.length > 1 ? ` · ועוד ${parsed.errors.length - 1} בעיות שמפורטות בשלב הבדיקה` : ""}`
+      : `${file.name}: נקלטו ${parsed.items.length} תלמידים בהצלחה.`;
     updateReview();
   }
 
@@ -397,7 +399,9 @@
     state.teachers = parsed.items;
     state.teacherErrors = parsed.errors;
     elements.teacherStatus.className = `file-status ${parsed.errors.length ? "error" : "ok"}`;
-    elements.teacherStatus.textContent = parsed.errors.length ? `${file.name}: נמצאו ${parsed.errors.length} בעיות.` : `${file.name}: נקלטו ${parsed.items.length} מורים.`;
+    elements.teacherStatus.textContent = parsed.errors.length
+      ? `${file.name}: ${parsed.errors[0]}${parsed.errors.length > 1 ? ` · ועוד ${parsed.errors.length - 1} בעיות שמפורטות בשלב הבדיקה` : ""}`
+      : `${file.name}: נקלטו ${parsed.items.length} מורים בהצלחה.`;
     updateReview();
   }
 
