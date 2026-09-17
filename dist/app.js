@@ -40,13 +40,17 @@
   const constraintStorageKey = `differential-project-${projectId}-constraints-v1`;
   const shareStorageKey = `differential-project-${projectId}-share-v1`;
   const historyStorageKey = `differential-project-${projectId}-history-v1`;
+  const registryStorageKey = "differential-student-registry-v1";
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
   let activeLocks = loadSavedLocks();
   let activeConstraints = loadSavedConstraints();
   let shareWilling = loadShareWilling();
+  let studentRegistry = loadStudentRegistry();
   let undoHistory = loadUndoHistory();
+  let activeRegistryStudentId = null;
+  let pendingRegistrySchedule = null;
   let activeAssignmentId = null;
   let activeView = "schedule";
   let toastTimer = null;
@@ -61,6 +65,7 @@
     validationList: document.querySelector("#validationList"),
     studentsView: document.querySelector("#studentsView"),
     teachersView: document.querySelector("#teachersView"),
+    registryView: document.querySelector("#registryView"),
     scheduleView: document.querySelector("#scheduleView"),
     dialog: document.querySelector("#editDialog"),
     dialogStudent: document.querySelector("#dialogStudent"),
@@ -97,6 +102,16 @@
     undoButton: document.querySelector("#undoButton"),
     saveStateText: document.querySelector("#saveStateText"),
     attentionPanel: document.querySelector("#attentionPanel"),
+    studentRegistryDialog: document.querySelector("#studentRegistryDialog"),
+    studentRegistryDialogTitle: document.querySelector("#studentRegistryDialogTitle"),
+    registryStudentName: document.querySelector("#registryStudentName"),
+    registryStudentGrade: document.querySelector("#registryStudentGrade"),
+    requestRows: document.querySelector("#requestRows"),
+    registryScheduleFile: document.querySelector("#registryScheduleFile"),
+    registryScheduleStatus: document.querySelector("#registryScheduleStatus"),
+    registryShareWilling: document.querySelector("#registryShareWilling"),
+    saveRegistryStudentButton: document.querySelector("#saveRegistryStudentButton"),
+    addRequestRowButton: document.querySelector("#addRequestRowButton"),
     toast: document.querySelector("#toast")
   };
 
@@ -155,6 +170,38 @@
     return defaults;
   }
 
+  function loadStudentRegistry() {
+    let saved = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(registryStorageKey));
+      if (Array.isArray(parsed)) saved = parsed;
+    } catch (_) {
+      localStorage.removeItem(registryStorageKey);
+    }
+    if (Array.isArray(payload.studentRegistry)) {
+      const merged = new Map(payload.studentRegistry.map(item => [item.id || item.fullName, item]));
+      saved.forEach(item => merged.set(item.id || item.fullName, item));
+      saved = [...merged.values()];
+    }
+    const byName = new Map(saved.map(item => [item.fullName, item]));
+    draft.students.forEach(student => {
+      if (byName.has(student.student)) return;
+      const availability = payload.studentAvailability.students.find(item => item.student === student.student);
+      byName.set(student.student, {
+        id: `imported-${student.student}`,
+        fullName: student.student,
+        grade: student.grade,
+        requests: [{ subject: projectMeta.subject || "מקצוע", hours: student.required }],
+        shareWilling: Boolean(student.shareWilling || availability?.shareWilling),
+        schedule: null,
+        progress: { [projectMeta.subject || "מקצוע"]: { assigned: student.assigned || 0 } },
+        source: "project",
+        projectStudentName: student.student
+      });
+    });
+    return [...byName.values()];
+  }
+
   function loadUndoHistory() {
     try {
       const saved = JSON.parse(sessionStorage.getItem(historyStorageKey));
@@ -171,7 +218,8 @@
       assignments: structuredClone(assignments),
       locks: structuredClone(activeLocks),
       constraints: structuredClone(activeConstraints),
-      shareWilling: structuredClone(shareWilling)
+      shareWilling: structuredClone(shareWilling),
+      studentRegistry: structuredClone(studentRegistry)
     };
   }
 
@@ -195,11 +243,13 @@
     activeLocks = snapshot.locks;
     activeConstraints = snapshot.constraints;
     shareWilling = snapshot.shareWilling;
+    studentRegistry = snapshot.studentRegistry || studentRegistry;
     sessionStorage.setItem(historyStorageKey, JSON.stringify(undoHistory));
     saveAssignments();
     saveLocks();
     saveConstraints();
     saveShareWilling();
+    saveStudentRegistry();
     updateUndoButton();
     renderAll();
     showToast(`הפעולה „${snapshot.label}” בוטלה.`);
@@ -229,6 +279,11 @@
 
   function saveShareWilling() {
     localStorage.setItem(shareStorageKey, JSON.stringify(shareWilling));
+    markSaved();
+  }
+
+  function saveStudentRegistry() {
+    localStorage.setItem(registryStorageKey, JSON.stringify(studentRegistry));
     markSaved();
   }
 
@@ -441,13 +496,58 @@
     elements.teachersView.innerHTML = `<div class="teacher-cards">${cards || "<p class='empty-filter'>אין תוצאות להצגה.</p>"}</div>`;
   }
 
+  function subjectMatchesProject(subject) {
+    const normalized = String(subject || "").trim().toLocaleLowerCase("he");
+    return [projectMeta.subject, ...(projectMeta.aliases || [])]
+      .map(item => String(item || "").trim().toLocaleLowerCase("he"))
+      .filter(Boolean)
+      .includes(normalized);
+  }
+
+  function refreshRegistryProgress() {
+    if (!projectMeta.subject) return;
+    const { byStudent } = assignmentCounts();
+    let changed = false;
+    studentRegistry.forEach(record => {
+      if (!record.requests?.some(request => subjectMatchesProject(request.subject))) return;
+      record.progress ||= {};
+      const assigned = byStudent.get(record.fullName) || 0;
+      if (record.progress[projectMeta.subject]?.assigned !== assigned) {
+        record.progress[projectMeta.subject] = { assigned };
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(registryStorageKey, JSON.stringify(studentRegistry));
+  }
+
+  function renderRegistryView() {
+    refreshRegistryProgress();
+    const query = elements.studentSearch.value.trim().toLocaleLowerCase("he");
+    const records = studentRegistry
+      .filter(record => !query || `${record.fullName} ${record.grade} ${(record.requests || []).map(item => item.subject).join(" ")}`.toLocaleLowerCase("he").includes(query))
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, "he"));
+    const cards = records.map(record => {
+      const chips = (record.requests || []).map(request => {
+        const assigned = record.progress?.[request.subject]?.assigned ?? 0;
+        return `<span class="basket-chip">${esc(request.subject)} · ${assigned}/${request.hours} שעות</span>`;
+      }).join("");
+      const scheduleText = record.schedule?.timetable?.length
+        ? `<span class="schedule-ready">מערכת שעות נקלטה</span>`
+        : `<span class="schedule-missing">נדרשת העלאת מערכת שעות</span>`;
+      return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}</p></div><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button></article>`;
+    }).join("");
+    elements.registryView.innerHTML = `<section class="registry-view"><div class="registry-view-head"><div><p class="eyebrow dark">ניהול הסל האישי</p><h2>מאגר תלמידים</h2><p>ריכוז זכאויות, מערכות שעות ומצב המענה בכל המקצועות.</p></div><button class="primary-button" data-new-registry type="button">קליטת תלמיד/ה</button></div><div class="registry-list">${cards || "<div class='registry-empty'><strong>המאגר עדיין ריק.</strong><p>אפשר לקלוט תלמיד או תלמידה ולהעלות את מערכת השעות שלהם.</p></div>"}</div></section>`;
+  }
+
   function renderActiveView() {
     elements.scheduleView.hidden = activeView !== "schedule";
     elements.studentsView.hidden = activeView !== "students";
     elements.teachersView.hidden = activeView !== "teachers";
+    elements.registryView.hidden = activeView !== "registry";
     if (activeView === "schedule") renderGrid();
     if (activeView === "students") renderStudentsView();
     if (activeView === "teachers") renderTeachersView();
+    if (activeView === "registry") renderRegistryView();
   }
 
   function teacherAllows(teacherName, studentName) {
@@ -1049,7 +1149,173 @@
     if (action === "report") openDeputyReport();
   }
 
+  function requestRowHtml(request = { subject: "", hours: 1 }) {
+    return `<div class="request-row"><label><span>מקצוע</span><input data-request-subject value="${esc(request.subject)}" placeholder="לדוגמה: מתמטיקה" /></label><label><span>מספר שעות</span><input data-request-hours type="number" min="1" max="20" step="1" value="${esc(request.hours || 1)}" /></label><button class="icon-button" data-remove-request type="button" aria-label="הסרת מקצוע">×</button></div>`;
+  }
+
+  function addRequestRow(request) {
+    elements.requestRows.insertAdjacentHTML("beforeend", requestRowHtml(request));
+  }
+
+  function openRegistryDialog(recordId = null) {
+    const record = studentRegistry.find(item => item.id === recordId);
+    activeRegistryStudentId = record?.id || null;
+    pendingRegistrySchedule = record?.schedule ? structuredClone(record.schedule) : null;
+    elements.studentRegistryDialogTitle.textContent = record ? "עריכת פרטי תלמיד/ה" : "קליטת תלמיד/ה";
+    elements.registryStudentName.value = record?.fullName || "";
+    elements.registryStudentGrade.value = record?.grade || "";
+    elements.registryShareWilling.checked = Boolean(record?.shareWilling);
+    elements.requestRows.innerHTML = "";
+    const requests = record?.requests?.length ? record.requests : [{ subject: projectMeta.subject === "שיבוצים" ? "" : projectMeta.subject, hours: 1 }];
+    requests.forEach(addRequestRow);
+    elements.registryScheduleFile.value = "";
+    elements.registryScheduleStatus.textContent = pendingRegistrySchedule
+      ? `המערכת שנקלטה: ${pendingRegistrySchedule.fileName || "קובץ Excel"}`
+      : "טרם נבחר קובץ.";
+    elements.studentRegistryDialog.showModal();
+    elements.registryStudentName.focus();
+  }
+
+  function readRegistryRequests() {
+    const rows = [...elements.requestRows.querySelectorAll(".request-row")];
+    const requests = rows.map(row => ({
+      subject: row.querySelector("[data-request-subject]").value.trim(),
+      hours: Number(row.querySelector("[data-request-hours]").value)
+    }));
+    if (!requests.length) throw new Error("יש להוסיף לפחות מקצוע אחד לסל האישי.");
+    if (requests.some(item => !item.subject || !Number.isInteger(item.hours) || item.hours < 1)) throw new Error("יש להזין מקצוע ומספר שעות תקין בכל שורה.");
+    const normalized = requests.map(item => item.subject.toLocaleLowerCase("he"));
+    if (new Set(normalized).size !== normalized.length) throw new Error("אותו מקצוע מופיע יותר מפעם אחת בסל האישי.");
+    return requests;
+  }
+
+  function timeRangeForPeriod(period, timetable) {
+    const row = timetable.find(item => item.period === period);
+    const raw = String(row?.time || "").trim();
+    const matches = raw.match(/(\d{1,2}:\d{2}).*?(\d{1,2}:\d{2})/);
+    if (matches) return { start: matches[1], end: matches[2] };
+    const start = raw.match(/\d{1,2}:\d{2}/)?.[0] || payload.studentAvailability.period_times?.[period]?.start || times[period] || "";
+    const nextStart = timetable.find(item => item.period === period + 1)?.time?.match(/\d{1,2}:\d{2}/)?.[0]
+      || payload.studentAvailability.period_times?.[period]?.end || times[period + 1] || "";
+    return { start, end: nextStart };
+  }
+
+  function availabilityFromRegistry(record, request) {
+    const timetable = record.schedule?.timetable || [];
+    const subjectTerms = [request.subject, projectMeta.subject, ...(projectMeta.aliases || [])]
+      .map(item => String(item || "").trim().toLocaleLowerCase("he")).filter(Boolean);
+    const candidates = [];
+    days.forEach(day => {
+      const rows = timetable.filter(row => row.period >= 0 && row.period <= 9).sort((a, b) => a.period - b.period);
+      const occupied = rows.filter(row => String(row.lessons?.[day] || "").trim()).map(row => row.period);
+      if (!occupied.length) return;
+      const first = Math.min(...occupied);
+      const last = Math.max(...occupied);
+      rows.forEach(row => {
+        const lesson = String(row.lessons?.[day] || "").trim();
+        const lessonNormalized = lesson.toLocaleLowerCase("he");
+        let category = null;
+        if (lesson && subjectTerms.some(term => lessonNormalized.includes(term))) category = "שיעור במקצוע";
+        else if (!lesson && row.period > first && row.period < last) category = "חלון";
+        else if (!lesson && row.period === first - 1) category = "קצה לפני";
+        else if (!lesson && row.period === last + 1) category = "קצה אחרי";
+        if (!category) return;
+        const range = timeRangeForPeriod(row.period, timetable);
+        candidates.push({ day, period: row.period, ...range, category, replaces_student_lesson: category === "שיעור במקצוע" ? lesson : null });
+      });
+    });
+    return { student: record.fullName, grade: record.grade, shareWilling: record.shareWilling, candidates };
+  }
+
+  function renameProjectStudent(oldName, newName) {
+    if (!oldName || oldName === newName) return;
+    assignments = assignments.map(item => item.student === oldName ? { ...item, student: newName } : item);
+    const student = draft.students.find(item => item.student === oldName);
+    if (student) student.student = newName;
+    const availability = payload.studentAvailability.students.find(item => item.student === oldName);
+    if (availability) availability.student = newName;
+    studentData.delete(oldName);
+    if (activeLocks[oldName]) {
+      activeLocks[newName] = activeLocks[oldName];
+      delete activeLocks[oldName];
+    }
+    if (Object.hasOwn(shareWilling, oldName)) delete shareWilling[oldName];
+  }
+
+  function syncRecordWithCurrentProject(record, oldName = null) {
+    const request = record.requests.find(item => subjectMatchesProject(item.subject));
+    if (!request) return false;
+    renameProjectStudent(oldName, record.fullName);
+    const currentStudent = draft.students.find(item => item.student === record.fullName);
+    const assigned = assignments.filter(item => item.student === record.fullName).length;
+    if (currentStudent) Object.assign(currentStudent, { grade: record.grade, required: request.hours, assigned, shareWilling: record.shareWilling });
+    else draft.students.push({ student: record.fullName, grade: record.grade, required: request.hours, assigned, shareWilling: record.shareWilling });
+    if (record.schedule?.timetable?.length) {
+      const availability = availabilityFromRegistry(record, request);
+      const currentAvailability = payload.studentAvailability.students.find(item => item.student === record.fullName);
+      if (currentAvailability) Object.assign(currentAvailability, availability);
+      else payload.studentAvailability.students.push(availability);
+      studentData.set(record.fullName, availability);
+    }
+    shareWilling[record.fullName] = record.shareWilling;
+    saveAssignments();
+    saveLocks();
+    saveShareWilling();
+    return true;
+  }
+
+  async function readRegistrySchedule(file) {
+    if (!file) return;
+    elements.registryScheduleStatus.textContent = "קורא את מערכת השעות…";
+    try {
+      const parsed = await window.XlsxScheduleReader.parseStudentSchedule(file);
+      pendingRegistrySchedule = { fileName: parsed.fileName, timetable: parsed.timetable };
+      if (!elements.registryStudentName.value.trim() && parsed.name) elements.registryStudentName.value = parsed.name;
+      if (!elements.registryStudentGrade.value.trim() && parsed.grade) elements.registryStudentGrade.value = parsed.grade;
+      elements.registryScheduleStatus.textContent = `הקובץ נקלט בהצלחה · ${parsed.timetable.length} שורות של שעות לימוד`;
+    } catch (error) {
+      pendingRegistrySchedule = null;
+      elements.registryScheduleFile.value = "";
+      elements.registryScheduleStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את הקובץ.";
+    }
+  }
+
+  function saveRegistryStudent() {
+    try {
+      const fullName = elements.registryStudentName.value.trim();
+      const grade = elements.registryStudentGrade.value.trim();
+      if (!fullName || !grade) throw new Error("יש להזין שם מלא וכיתה.");
+      const duplicate = studentRegistry.find(item => item.fullName === fullName && item.id !== activeRegistryStudentId);
+      if (duplicate) throw new Error("תלמיד/ה בשם זה כבר קיימ/ת במאגר.");
+      const existing = studentRegistry.find(item => item.id === activeRegistryStudentId);
+      if (!pendingRegistrySchedule && !existing) throw new Error("בקליטת תלמיד/ה חדש/ה יש להעלות מערכת שעות אישית.");
+      const requests = readRegistryRequests();
+      captureUndo(existing ? "עריכת פרטי תלמיד/ה" : "קליטת תלמיד/ה");
+      const record = {
+        id: existing?.id || `student-${Date.now()}`,
+        fullName,
+        grade,
+        requests,
+        shareWilling: elements.registryShareWilling.checked,
+        schedule: pendingRegistrySchedule,
+        progress: existing?.progress || {},
+        source: existing?.source || "registry",
+        projectStudentName: existing?.projectStudentName || (existing?.source === "project" ? existing.fullName : null)
+      };
+      if (existing) studentRegistry[studentRegistry.indexOf(existing)] = record;
+      else studentRegistry.push(record);
+      const synced = syncRecordWithCurrentProject(record, existing?.fullName);
+      saveStudentRegistry();
+      elements.studentRegistryDialog.close();
+      renderAll();
+      showToast(synced ? "התלמיד/ה נקלט/ה ונוספ/ה לפרויקט השיבוץ הנוכחי." : "פרטי התלמיד/ה נשמרו במאגר.");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "לא ניתן לשמור את פרטי התלמיד/ה.");
+    }
+  }
+
   function renderAll() {
+    refreshRegistryProgress();
     renderSummary();
     renderSidebar();
     renderActiveView();
@@ -1102,6 +1368,7 @@
       locks: activeLocks,
       constraints: activeConstraints,
       shareWilling,
+      studentRegistry,
       missingStudents: missingStudents().map(student => ({ student: student.student, missing: student.missingNow }))
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -1161,10 +1428,12 @@
       activeLocks = importedLocks;
       activeConstraints = Array.isArray(parsed.constraints) ? parsed.constraints : [];
       shareWilling = parsed.shareWilling && typeof parsed.shareWilling === "object" ? parsed.shareWilling : loadShareWilling();
+      if (Array.isArray(parsed.studentRegistry)) studentRegistry = parsed.studentRegistry;
       saveAssignments();
       saveLocks();
       saveConstraints();
       saveShareWilling();
+      saveStudentRegistry();
       renderAll();
       const issues = scheduleWarnings().filter(item => item.level !== "ok").length;
       showToast(issues ? `הפרויקט נטען. נמצאו ${issues} התראות לבדיקה.` : "הפרויקט נטען בהצלחה ולא נמצאו בעיות.");
@@ -1255,6 +1524,16 @@
   elements.teacherFilter.addEventListener("change", renderActiveView);
   elements.studentSearch.addEventListener("input", renderActiveView);
   document.body.addEventListener("click", event => {
+    const newRegistryTarget = event.target.closest("[data-new-registry]");
+    if (newRegistryTarget) {
+      openRegistryDialog();
+      return;
+    }
+    const editRegistryTarget = event.target.closest("[data-edit-registry]");
+    if (editRegistryTarget) {
+      openRegistryDialog(editRegistryTarget.dataset.editRegistry);
+      return;
+    }
     const addTarget = event.target.closest("[data-add-student]");
     if (addTarget) {
       openAddDialog(addTarget.dataset.addStudent);
@@ -1305,7 +1584,18 @@
   elements.undoButton.addEventListener("click", undoLastAction);
   elements.nextActionButton.addEventListener("click", handleNextAction);
   elements.reviewWarningsButton.addEventListener("click", focusAttentionPanel);
+  elements.addRequestRowButton.addEventListener("click", () => addRequestRow());
+  elements.requestRows.addEventListener("click", event => {
+    const button = event.target.closest("[data-remove-request]");
+    if (button) button.closest(".request-row").remove();
+  });
+  elements.registryScheduleFile.addEventListener("change", async () => {
+    const [file] = elements.registryScheduleFile.files;
+    await readRegistrySchedule(file);
+  });
+  elements.saveRegistryStudentButton.addEventListener("click", saveRegistryStudent);
 
+  studentRegistry.forEach(record => syncRecordWithCurrentProject(record, record.projectStudentName));
   renderAll();
   registerWebMcpTools();
 })();

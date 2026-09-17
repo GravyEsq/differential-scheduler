@@ -254,6 +254,41 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
 .constraint-row { margin-bottom: 8px; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 9px; }
 .constraint-row strong, .constraint-row small { display: block; }
 .constraint-row small { margin-top: 4px; color: var(--muted); }
+.registry-view { padding: 18px; }
+.registry-view-head { margin-bottom: 16px; padding: 4px 2px 16px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--line); }
+.registry-view-head h2 { margin: 0 0 5px; font-size: 1.2rem; }
+.registry-view-head p { margin: 0; color: var(--muted); line-height: 1.5; }
+.registry-list { display: grid; gap: 10px; }
+.registry-card { padding: 15px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfe; }
+.registry-card > div > p { margin: 9px 0 0; color: var(--muted); font-size: .8rem; }
+.registry-name { display: flex; align-items: baseline; gap: 9px; }
+.registry-name h3, .registry-name span { display: block; }
+.registry-name h3 { margin: 0; font-size: .98rem; }
+.registry-name span { margin-top: 4px; color: var(--muted); font-size: .82rem; }
+.basket-chips { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+.basket-chip { padding: 5px 8px; border-radius: 999px; color: #274f7e; background: #eaf2fc; font-size: .78rem; font-weight: 700; }
+.schedule-ready { margin-top: 7px; color: #17645f; font-size: .78rem; }
+.schedule-missing { margin-top: 7px; color: #8a5d12; font-size: .78rem; }
+.registry-empty { padding: 46px 20px; text-align: center; color: var(--muted); }
+.registry-empty strong { display: block; margin-bottom: 7px; color: var(--ink); font-size: 1rem; }
+.student-registry-dialog { width: min(760px, calc(100vw - 28px)); }
+.registry-form { max-height: min(66vh, 650px); overflow-y: auto; }
+.registry-identity { padding: 18px 22px 2px; }
+.form-grid.registry-identity label { display: grid; gap: 7px; color: var(--ink); font-size: .88rem; font-weight: 700; }
+.form-grid.registry-identity input { width: 100%; }
+.basket-section, .schedule-upload-section { margin: 18px 22px 0; padding-top: 17px; border-top: 1px solid var(--line); }
+.basket-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.basket-heading h3, .schedule-upload-section h3 { margin: 0 0 5px; font-size: .98rem; }
+.basket-heading p, .schedule-upload-section p { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.request-rows { margin-top: 13px; display: grid; gap: 8px; }
+.request-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 8px; align-items: end; }
+.request-row label { display: grid; gap: 5px; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.request-row input { width: 100%; min-width: 0; }
+.request-row .icon-button { min-width: 41px; min-height: 41px; padding: 0 11px; color: #8a2530; background: #fff; border: 1px solid #e2aeb5; border-radius: 8px; cursor: pointer; font-size: 1.15rem; }
+.registry-file-picker { margin-top: 12px; display: inline-flex; }
+.share-consent-row { margin: 18px 22px 4px; padding: 12px 13px; display: flex; align-items: center; gap: 10px; border-radius: 9px; background: #f2f6fb; cursor: pointer; }
+.share-consent-row input { width: 18px; min-width: 18px; height: 18px; }
+.share-consent-row span { color: #42556e; font-size: .86rem; line-height: 1.45; }
 .toast { position: fixed; inset-inline-start: 22px; bottom: 22px; z-index: 20; max-width: min(390px, calc(100vw - 44px)); padding: 12px 16px; color: white; background: #17395f; border-radius: 9px; box-shadow: 0 10px 26px rgba(23,57,95,.25); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .2s ease; }
 .toast.show { opacity: 1; transform: translateY(0); }
 
@@ -290,6 +325,10 @@ select:focus, input:focus, button:focus-visible { border-color: var(--blue); box
   .swap-route { grid-template-columns: 1fr; }
   .share-willing-list, .constraint-form { grid-template-columns: 1fr; }
   .share-card { align-items: stretch; flex-direction: column; }
+  .registry-view-head { align-items: stretch; flex-direction: column; }
+  .registry-card { grid-template-columns: 1fr; gap: 11px; }
+  .request-row { grid-template-columns: 1fr 90px; }
+  .request-row .icon-button { grid-column: 1 / -1; }
 }
 
 /* Project setup */

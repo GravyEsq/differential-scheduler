@@ -59,6 +59,7 @@
         <button class="view-tab active" data-view="schedule" type="button">מערכת שבועית</button>
         <button class="view-tab" data-view="students" type="button">לפי תלמידים</button>
         <button class="view-tab" data-view="teachers" type="button">לפי צוות</button>
+        <button class="view-tab" data-view="registry" type="button">מאגר תלמידים</button>
       </nav>
 
       <section class="workspace">
@@ -94,6 +95,7 @@
           </div>
           <div id="studentsView" class="content-view" hidden></div>
           <div id="teachersView" class="content-view" hidden></div>
+          <div id="registryView" class="content-view" hidden></div>
         </div>
 
         <aside id="attentionPanel" class="side-panel" tabindex="-1">
@@ -246,9 +248,39 @@
       </form>
     </dialog>
 
+    <dialog id="studentRegistryDialog" class="edit-dialog student-registry-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">מאגר תלמידים</p><h2 id="studentRegistryDialogTitle">קליטת תלמיד/ה</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <div class="registry-form">
+          <div class="form-grid registry-identity">
+            <label><span>שם מלא</span><input id="registryStudentName" autocomplete="off" required /></label>
+            <label><span>כיתה</span><input id="registryStudentGrade" autocomplete="off" placeholder="לדוגמה: יא5" required /></label>
+          </div>
+          <section class="basket-section">
+            <div class="basket-heading"><div><h3>סל אישי</h3><p>המקצועות שבהם התלמיד/ה מבקש/ת שעות חיזוק.</p></div><button id="addRequestRowButton" class="secondary-button" type="button">הוספת מקצוע</button></div>
+            <div id="requestRows" class="request-rows"></div>
+          </section>
+          <section class="schedule-upload-section">
+            <div><h3>מערכת שעות אישית</h3><p>העלאת קובץ Excel של מערכת התלמיד/ה מאפשרת לזהות חלונות, שעות מקצוע ושעות מחוץ למערכת.</p></div>
+            <label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+            <div id="registryScheduleStatus" class="file-status">טרם נבחר קובץ.</div>
+          </section>
+          <label class="share-consent-row"><input id="registryShareWilling" type="checkbox" /><span>קיימת הסכמה לשיבוץ זוגי, אם תימצא התאמה מתאימה.</span></label>
+        </div>
+        <div class="dialog-actions">
+          <button id="saveRegistryStudentButton" class="primary-button" type="button">שמירת התלמיד/ה</button>
+          <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="schedule-data.js"></script>
+    <script src="xlsx-reader.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
