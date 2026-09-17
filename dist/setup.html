@@ -4,10 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="יצירת פרויקט חדש לשיבוץ שעות דיפרנציאליות" />
+    <meta name="theme-color" content="#183b65" />
+    <link rel="manifest" href="manifest.webmanifest" />
     <title>פרויקט שיבוץ חדש</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="setup-page">
+    <a class="skip-link" href="#projectForm">דילוג להגדרת הפרויקט</a>
     <header class="topbar setup-topbar">
       <div>
         <p class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
@@ -19,6 +22,7 @@
     <main class="setup-main guided-main">
       <form id="projectForm" class="guided-wizard">
         <div class="wizard-progress"><span id="wizardProgressText">שלב 1 מתוך 4</span><div><i id="wizardProgressBar"></i></div></div>
+        <div id="wizardMessage" class="form-message" role="alert" aria-live="assertive"></div>
 
         <section class="wizard-step active" data-step="0">
           <p class="eyebrow dark">התחלה</p>
@@ -38,7 +42,7 @@
             <label class="file-picker"><span>בחירת קובץ תלמידים</span><input id="studentFileInput" type="file" accept=".csv,text/csv" /></label>
             <button id="studentTemplateButton" class="text-button" type="button">הורדת תבנית</button>
           </div>
-          <div id="studentFileStatus" class="file-status">אפשר להמשיך גם ללא קובץ.</div>
+          <div id="studentFileStatus" class="file-status" aria-live="polite">אפשר להמשיך גם ללא קובץ.</div>
         </section>
 
         <section class="wizard-step" data-step="2" hidden>
@@ -49,7 +53,7 @@
             <label class="file-picker"><span>בחירת קובץ מורים</span><input id="teacherFileInput" type="file" accept=".csv,text/csv" required /></label>
             <button id="teacherTemplateButton" class="text-button" type="button">הורדת תבנית</button>
           </div>
-          <div id="teacherFileStatus" class="file-status">טרם נבחר קובץ.</div>
+          <div id="teacherFileStatus" class="file-status" aria-live="polite">טרם נבחר קובץ.</div>
         </section>
 
         <section class="wizard-step" data-step="3" hidden>

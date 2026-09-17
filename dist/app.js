@@ -9,7 +9,7 @@
     if (window.name.startsWith(transferPrefix)) {
       storedProject = JSON.parse(window.name.slice(transferPrefix.length));
       window.name = "";
-      localStorage.setItem(activeProjectKey, JSON.stringify(storedProject));
+      try { localStorage.setItem(activeProjectKey, JSON.stringify(storedProject)); } catch (_) { /* The transferred project can still run for this session. */ }
     } else {
       storedProject = JSON.parse(localStorage.getItem(activeProjectKey));
     }
@@ -42,6 +42,7 @@
   const historyStorageKey = `differential-project-${projectId}-history-v1`;
   const registryStorageKey = "differential-student-registry-v1";
   const lastBackupKey = "differential-last-backup-v1";
+  const maxBackupBytes = 15 * 1024 * 1024;
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
@@ -69,6 +70,10 @@
     studentsView: document.querySelector("#studentsView"),
     teachersView: document.querySelector("#teachersView"),
     registryView: document.querySelector("#registryView"),
+    toolbarTitle: document.querySelector("#toolbarTitle"),
+    toolbarDescription: document.querySelector("#toolbarDescription"),
+    searchControl: document.querySelector("#searchControl"),
+    teacherFilterControl: document.querySelector("#teacherFilterControl"),
     scheduleView: document.querySelector("#scheduleView"),
     dialog: document.querySelector("#editDialog"),
     dialogStudent: document.querySelector("#dialogStudent"),
@@ -119,6 +124,7 @@
     studentWizardBar: document.querySelector("#studentWizardBar"),
     studentWizardBack: document.querySelector("#studentWizardBack"),
     studentWizardNext: document.querySelector("#studentWizardNext"),
+    studentWizardMessage: document.querySelector("#studentWizardMessage"),
     registryAllowOtherLessons: document.querySelector("#registryAllowOtherLessons"),
     registryNoPeriodZero: document.querySelector("#registryNoPeriodZero"),
     registryExceptionNotes: document.querySelector("#registryExceptionNotes"),
@@ -244,7 +250,7 @@
   function captureUndo(label) {
     undoHistory.push(currentSnapshot(label));
     undoHistory = undoHistory.slice(-20);
-    sessionStorage.setItem(historyStorageKey, JSON.stringify(undoHistory));
+    safeSessionSet(historyStorageKey, JSON.stringify(undoHistory));
     updateUndoButton();
   }
 
@@ -262,7 +268,7 @@
     activeConstraints = snapshot.constraints;
     shareWilling = snapshot.shareWilling;
     studentRegistry = snapshot.studentRegistry || studentRegistry;
-    sessionStorage.setItem(historyStorageKey, JSON.stringify(undoHistory));
+    safeSessionSet(historyStorageKey, JSON.stringify(undoHistory));
     saveAssignments();
     saveLocks();
     saveConstraints();
@@ -280,29 +286,44 @@
     saveStateTimer = setTimeout(() => { elements.saveStateText.textContent = "כל השינויים נשמרו במכשיר זה"; }, 3000);
   }
 
+  function safeLocalSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (_) {
+      showToast("לא ניתן לשמור במכשיר. מומלץ להוריד גיבוי ולפנות מקום בדפדפן.");
+      return false;
+    }
+  }
+
+  function safeSessionSet(key, value) {
+    try {
+      sessionStorage.setItem(key, value);
+      return true;
+    } catch (_) {
+      showToast("היסטוריית הביטול מלאה. השינויים עצמם נשמרו כרגיל.");
+      return false;
+    }
+  }
+
   function saveLocks() {
-    localStorage.setItem(lockStorageKey, JSON.stringify(activeLocks));
-    markSaved();
+    if (safeLocalSet(lockStorageKey, JSON.stringify(activeLocks))) markSaved();
   }
 
   function saveAssignments() {
-    localStorage.setItem(storageKey, JSON.stringify(assignments));
-    markSaved();
+    if (safeLocalSet(storageKey, JSON.stringify(assignments))) markSaved();
   }
 
   function saveConstraints() {
-    localStorage.setItem(constraintStorageKey, JSON.stringify(activeConstraints));
-    markSaved();
+    if (safeLocalSet(constraintStorageKey, JSON.stringify(activeConstraints))) markSaved();
   }
 
   function saveShareWilling() {
-    localStorage.setItem(shareStorageKey, JSON.stringify(shareWilling));
-    markSaved();
+    if (safeLocalSet(shareStorageKey, JSON.stringify(shareWilling))) markSaved();
   }
 
   function saveStudentRegistry() {
-    localStorage.setItem(registryStorageKey, JSON.stringify(studentRegistry));
-    markSaved();
+    if (safeLocalSet(registryStorageKey, JSON.stringify(studentRegistry))) markSaved();
   }
 
   function assignmentCounts() {
@@ -354,10 +375,10 @@
       bySlot.get(key).push(item);
     });
 
-    const cells = [`<div class="grid-cell grid-head">שעה</div>`];
-    days.forEach(day => cells.push(`<div class="grid-cell grid-head">${day}</div>`));
+    const cells = [`<div class="grid-cell grid-head" role="columnheader">שעה</div>`];
+    days.forEach(day => cells.push(`<div class="grid-cell grid-head" role="columnheader">${day}</div>`));
     for (let period = 0; period <= 9; period += 1) {
-      cells.push(`<div class="grid-cell period-cell"><strong>${period}</strong><small>${times[period]}</small></div>`);
+      cells.push(`<div class="grid-cell period-cell" role="rowheader"><strong>${period}</strong><small>${times[period]}</small></div>`);
       days.forEach(day => {
         const lessons = (bySlot.get(`${day}-${period}`) || []).sort((a, b) => a.teacher.localeCompare(b.teacher, "he"));
         const cards = lessons.map(item => {
@@ -366,7 +387,7 @@
           const shared = item.groupId ? " · שיבוץ זוגי" : "";
           return `<button class="lesson-card ${gradeClass} ${edgeClass} ${item.groupId ? "shared" : ""}" data-assignment-id="${esc(item.id)}" type="button"><strong>${esc(item.student)}</strong><span>${esc(item.teacher)} · ${esc(item.grade)}${shared}</span></button>`;
         }).join("");
-        cells.push(`<div class="grid-cell">${cards}</div>`);
+        cells.push(`<div class="grid-cell" role="gridcell" aria-label="${esc(day)}, שעה ${period}">${cards}</div>`);
       });
     }
     elements.grid.innerHTML = cells.join("");
@@ -537,7 +558,7 @@
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(registryStorageKey, JSON.stringify(studentRegistry));
+    if (changed) safeLocalSet(registryStorageKey, JSON.stringify(studentRegistry));
   }
 
   function renderRegistryView() {
@@ -557,10 +578,19 @@
       const exceptionLabels = [record.exceptions?.allowOtherLessons ? "אפשר שיבוץ על חשבון שיעור" : "", record.exceptions?.noPeriodZero ? "ללא שעה 0" : ""].filter(Boolean);
       return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}${exceptionLabels.length ? ` · ${esc(exceptionLabels.join(" · "))}` : ""}</p></div><div class="registry-actions"><button class="primary-button" data-view-registry="${esc(record.id)}" type="button">פתיחת כרטיס</button><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button></div></article>`;
     }).join("");
-    elements.registryView.innerHTML = `<section class="registry-view"><div class="registry-view-head"><div><p class="eyebrow dark">ניהול הסל האישי</p><h2>מאגר תלמידים</h2><p>ריכוז זכאויות, מערכות שעות ומצב המענה בכל המקצועות.</p></div><button class="primary-button" data-new-registry type="button">קליטת תלמיד/ה</button></div><div class="registry-list">${cards || "<div class='registry-empty'><strong>המאגר עדיין ריק.</strong><p>אפשר לקלוט תלמיד או תלמידה ולהעלות את מערכת השעות שלהם.</p></div>"}</div></section>`;
+    elements.registryView.innerHTML = `<section class="registry-view"><div class="registry-view-head"><p>ריכוז זכאויות, מערכות שעות ומצב המענה בכל המקצועות.</p><button class="primary-button" data-new-registry type="button">קליטת תלמיד/ה</button></div><div class="registry-list">${cards || "<div class='registry-empty'><strong>המאגר עדיין ריק.</strong><p>אפשר לקלוט תלמיד או תלמידה ולהעלות את מערכת השעות שלהם.</p></div>"}</div></section>`;
   }
 
   function renderActiveView() {
+    const viewCopy = {
+      schedule: ["מערכת שבועית", "מוצגים השיבוצים התואמים למסננים הפעילים."],
+      students: ["שיבוצים לפי תלמידים", "מעקב אחר הזכאות והשעות שנקבעו לכל תלמיד ותלמידה."],
+      teachers: ["שיבוצים לפי צוות", "עומס השעות והמערכת של כל מורה בפרויקט."],
+      registry: ["מאגר תלמידים", "ניהול הסל האישי, מערכת השעות והחרגות השיבוץ."]
+    };
+    [elements.toolbarTitle.textContent, elements.toolbarDescription.textContent] = viewCopy[activeView];
+    elements.searchControl.hidden = activeView === "teachers";
+    elements.teacherFilterControl.hidden = !["schedule", "teachers"].includes(activeView);
     elements.scheduleView.hidden = activeView !== "schedule";
     elements.studentsView.hidden = activeView !== "students";
     elements.teachersView.hidden = activeView !== "teachers";
@@ -569,6 +599,7 @@
     if (activeView === "students") renderStudentsView();
     if (activeView === "teachers") renderTeachersView();
     if (activeView === "registry") renderRegistryView();
+    document.querySelectorAll(".view-tab").forEach(button => button.setAttribute("aria-selected", String(button.dataset.view === activeView)));
   }
 
   function teacherAllows(teacherName, studentName) {
@@ -1196,6 +1227,7 @@
     elements.registryScheduleStatus.textContent = pendingRegistrySchedule
       ? `המערכת שנקלטה: ${pendingRegistrySchedule.fileName || "קובץ Excel"}`
       : "טרם נבחר קובץ.";
+    elements.registryScheduleStatus.className = `file-status${pendingRegistrySchedule ? " ok" : ""}`;
     showStudentWizardStep(0);
     elements.studentRegistryDialog.showModal();
     elements.registryStudentName.focus();
@@ -1213,23 +1245,26 @@
     elements.studentWizardBack.hidden = studentWizardStep === 0;
     elements.studentWizardNext.hidden = studentWizardStep === 5;
     elements.saveRegistryStudentButton.hidden = studentWizardStep !== 5;
+    elements.studentWizardMessage.textContent = "";
     document.querySelector(`[data-student-step="${studentWizardStep}"] input:not([type="file"])`)?.focus();
   }
 
   function studentWizardCanContinue() {
     if (studentWizardStep === 0 && !elements.registryStudentName.value.trim()) {
-      alert("יש להזין שם מלא כדי להמשיך.");
+      elements.studentWizardMessage.textContent = "יש להזין שם מלא כדי להמשיך.";
+      elements.registryStudentName.focus();
       return false;
     }
     if (studentWizardStep === 1 && !elements.registryStudentGrade.value.trim()) {
-      alert("יש להזין כיתה כדי להמשיך.");
+      elements.studentWizardMessage.textContent = "יש להזין כיתה כדי להמשיך.";
+      elements.registryStudentGrade.focus();
       return false;
     }
     if (studentWizardStep === 2) {
-      try { readRegistryRequests(); } catch (error) { alert(error.message); return false; }
+      try { readRegistryRequests(); } catch (error) { elements.studentWizardMessage.textContent = error.message; return false; }
     }
     if (studentWizardStep === 3 && !pendingRegistrySchedule && !activeRegistryStudentId) {
-      alert("יש להעלות מערכת שעות כדי להמשיך. כך המערכת תוכל להציע שעות מתאימות.");
+      elements.studentWizardMessage.textContent = "יש להעלות מערכת שעות כדי להמשיך. כך המערכת תוכל להציע שעות מתאימות.";
       return false;
     }
     return true;
@@ -1303,7 +1338,7 @@
     if (Object.hasOwn(shareWilling, oldName)) delete shareWilling[oldName];
   }
 
-  function syncRecordWithCurrentProject(record, oldName = null) {
+  function syncRecordWithCurrentProject(record, oldName = null, persist = true) {
     const request = record.requests.find(item => subjectMatchesProject(item.subject));
     if (!request) return false;
     renameProjectStudent(oldName, record.fullName);
@@ -1319,25 +1354,30 @@
       studentData.set(record.fullName, availability);
     }
     shareWilling[record.fullName] = record.shareWilling;
-    saveAssignments();
-    saveLocks();
-    saveShareWilling();
+    if (persist) {
+      saveAssignments();
+      saveLocks();
+      saveShareWilling();
+    }
     return true;
   }
 
   async function readRegistrySchedule(file) {
     if (!file) return;
     elements.registryScheduleStatus.textContent = "קורא את מערכת השעות…";
+    elements.registryScheduleStatus.className = "file-status";
     try {
       const parsed = await window.XlsxScheduleReader.parseStudentSchedule(file);
       pendingRegistrySchedule = { fileName: parsed.fileName, timetable: parsed.timetable };
       if (!elements.registryStudentName.value.trim() && parsed.name) elements.registryStudentName.value = parsed.name;
       if (!elements.registryStudentGrade.value.trim() && parsed.grade) elements.registryStudentGrade.value = parsed.grade;
       elements.registryScheduleStatus.textContent = `הקובץ נקלט בהצלחה · ${parsed.timetable.length} שורות של שעות לימוד`;
+      elements.registryScheduleStatus.className = "file-status ok";
     } catch (error) {
       pendingRegistrySchedule = null;
       elements.registryScheduleFile.value = "";
       elements.registryScheduleStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את הקובץ.";
+      elements.registryScheduleStatus.className = "file-status error";
     }
   }
 
@@ -1430,7 +1470,7 @@
     projectMeta.lastPeriod = Number(document.querySelector("#settingsLastPeriod").value) || 9;
     projectMeta.avoidPeriods = document.querySelector("#settingsAvoidPeriods").value.split(",").map(Number).filter(Number.isInteger);
     payload.meta = projectMeta;
-    localStorage.setItem(activeProjectKey, JSON.stringify(payload));
+    safeLocalSet(activeProjectKey, JSON.stringify(payload));
     document.querySelector("#projectEyebrow").textContent = `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
     document.querySelector("#projectTitle").textContent = `שיבוצי ${projectMeta.subject} דיפרנציאליים`;
     elements.settingsDialog.close();
@@ -1512,7 +1552,7 @@
     link.download = `פרויקט-שיבוצי-${projectMeta.subject || "דיפרנציאלי"}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
-    localStorage.setItem(lastBackupKey, new Date().toISOString());
+    safeLocalSet(lastBackupKey, new Date().toISOString());
     updateBackupMessage();
     showToast("הגיבוי הורד למחשב בהצלחה.");
   }
@@ -1548,12 +1588,13 @@
 
   async function importDraft(file) {
     try {
+      if (file.size > maxBackupBytes) throw new Error("קובץ הגיבוי גדול מ־15MB ולכן לא ניתן לקרוא אותו בבטחה.");
       const parsed = JSON.parse(await file.text());
       if (parsed?.kind === "differential-scheduling-project" && parsed.schedule && parsed.studentAvailability && parsed.teacherAvailability) {
         const projectName = parsed.meta?.team || parsed.meta?.subject || "הפרויקט החדש";
         if (!confirm(`לטעון את ${projectName} במקום הפרויקט המוצג כעת?`)) return;
-        if (Array.isArray(parsed.studentRegistry)) localStorage.setItem(registryStorageKey, JSON.stringify(parsed.studentRegistry));
-        localStorage.setItem(activeProjectKey, JSON.stringify(parsed));
+        if (Array.isArray(parsed.studentRegistry)) safeLocalSet(registryStorageKey, JSON.stringify(parsed.studentRegistry));
+        safeLocalSet(activeProjectKey, JSON.stringify(parsed));
         location.reload();
         return;
       }
@@ -1646,6 +1687,9 @@
   document.querySelector("#projectTitle").textContent = isEmptyProject ? "פרויקט חדש" : `שיבוצי ${projectMeta.subject || "דיפרנציאליים"} דיפרנציאליים`;
   document.title = isEmptyProject ? "מערכת שיבוצים דיפרנציאליים" : `${projectMeta.subject || "שיבוצים"} — ${projectMeta.school || "מערכת דיפרנציאלית"}`;
   document.querySelector("#emptyProjectState").hidden = !isEmptyProject;
+  document.querySelector("#summarySection").hidden = isEmptyProject;
+  document.querySelector("#viewTabs").hidden = isEmptyProject;
+  document.querySelector("#workspaceSection").hidden = isEmptyProject;
   const defaultProjectButton = document.querySelector("#defaultProjectButton");
   defaultProjectButton.hidden = !storedProject;
   defaultProjectButton.addEventListener("click", () => {
@@ -1654,11 +1698,26 @@
     location.reload();
   });
 
-  document.querySelectorAll(".view-tab").forEach(button => button.addEventListener("click", () => {
+  const viewTabs = [...document.querySelectorAll(".view-tab")];
+  function activateViewTab(button) {
     activeView = button.dataset.view;
-    document.querySelectorAll(".view-tab").forEach(tab => tab.classList.toggle("active", tab === button));
+    viewTabs.forEach(tab => {
+      tab.classList.toggle("active", tab === button);
+      tab.setAttribute("aria-selected", String(tab === button));
+      tab.tabIndex = tab === button ? 0 : -1;
+    });
     renderActiveView();
-  }));
+  }
+  viewTabs.forEach((button, index) => {
+    button.addEventListener("click", () => activateViewTab(button));
+    button.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? viewTabs.length - 1 : event.key === "ArrowLeft" ? (index + 1) % viewTabs.length : (index - 1 + viewTabs.length) % viewTabs.length;
+      activateViewTab(viewTabs[nextIndex]);
+      viewTabs[nextIndex].focus();
+    });
+  });
   elements.teacherFilter.addEventListener("change", renderActiveView);
   elements.studentSearch.addEventListener("input", renderActiveView);
   document.body.addEventListener("click", event => {
@@ -1748,8 +1807,17 @@
   document.querySelector("#privacyButton").addEventListener("click", () => { updateBackupMessage(); elements.privacyDialog.showModal(); });
   document.querySelector("#privacyBackupButton").addEventListener("click", exportDraft);
 
-  studentRegistry.forEach(record => syncRecordWithCurrentProject(record, record.projectStudentName));
+  let registryHydratedProject = false;
+  studentRegistry.forEach(record => { registryHydratedProject = syncRecordWithCurrentProject(record, record.projectStudentName, false) || registryHydratedProject; });
+  if (registryHydratedProject) {
+    saveAssignments();
+    saveLocks();
+    saveShareWilling();
+  }
   updateBackupMessage();
   renderAll();
   registerWebMcpTools();
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
+  window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();

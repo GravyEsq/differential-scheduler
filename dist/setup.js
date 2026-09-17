@@ -14,6 +14,7 @@
   const TEACHER_REQUIRED_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
   const TEACHER_HEADERS = [...TEACHER_REQUIRED_HEADERS, "שעות הוראה קבועות ביום"];
   const activeProjectKey = "differential-active-project-v1";
+  const MAX_CSV_BYTES = 5 * 1024 * 1024;
   const state = { students: [], teachers: null, studentErrors: [], teacherErrors: [], step: 0 };
 
   const elements = {
@@ -35,6 +36,7 @@
     back: document.querySelector("#wizardBackButton"),
     progressText: document.querySelector("#wizardProgressText"),
     progressBar: document.querySelector("#wizardProgressBar"),
+    message: document.querySelector("#wizardMessage"),
     toast: document.querySelector("#toast")
   };
 
@@ -380,6 +382,13 @@
   async function loadStudentFile() {
     const [file] = elements.studentFile.files;
     if (!file) return;
+    if (file.size > MAX_CSV_BYTES) {
+      state.students = [];
+      state.studentErrors = ["הקובץ גדול מ־5MB. יש לפצל אותו או להסיר שורות שאינן נחוצות."];
+      elements.studentStatus.className = "file-status error";
+      elements.studentStatus.textContent = state.studentErrors[0];
+      return updateReview();
+    }
     const text = await file.text();
     const meta = projectMeta();
     const errors = headerErrors(text, STUDENT_REQUIRED_HEADERS);
@@ -396,6 +405,13 @@
   async function loadTeacherFile() {
     const [file] = elements.teacherFile.files;
     if (!file) return;
+    if (file.size > MAX_CSV_BYTES) {
+      state.teachers = null;
+      state.teacherErrors = ["הקובץ גדול מ־5MB. יש לפצל אותו או להסיר שורות שאינן נחוצות."];
+      elements.teacherStatus.className = "file-status error";
+      elements.teacherStatus.textContent = state.teacherErrors[0];
+      return updateReview();
+    }
     const text = await file.text();
     const meta = projectMeta();
     const errors = headerErrors(text, TEACHER_REQUIRED_HEADERS);
@@ -447,6 +463,7 @@
     elements.back.hidden = state.step === 0;
     elements.next.hidden = state.step === 3;
     elements.create.hidden = state.step !== 3;
+    elements.message.textContent = "";
     if (state.step === 3) updateReview();
     document.querySelector(`.wizard-step[data-step="${state.step}"] input:not([type="file"])`)?.focus();
   }
@@ -454,15 +471,18 @@
   function canContinue() {
     if (state.step === 0) {
       if (!clean(elements.subject.value) || !clean(elements.school.value)) {
+        elements.message.textContent = "יש למלא את המקצוע ואת שם בית הספר כדי להמשיך.";
         elements.form.reportValidity();
         return false;
       }
     }
     if (state.step === 1 && state.studentErrors.length) {
+      elements.message.textContent = state.studentErrors[0];
       elements.studentStatus.textContent = `יש לתקן את הקובץ לפני שממשיכים: ${state.studentErrors[0]}`;
       return false;
     }
     if (state.step === 2 && (!state.teachers?.length || state.teacherErrors.length)) {
+      elements.message.textContent = state.teacherErrors[0] || "יש לבחור קובץ מורים תקין כדי להמשיך.";
       elements.teacherStatus.textContent = state.teacherErrors[0] || "יש לבחור קובץ מורים תקין כדי להמשיך.";
       elements.teacherStatus.className = "file-status error";
       return false;
@@ -509,9 +529,14 @@
       studentAvailability: { schemaVersion: 2, status: "project", period_times: PERIOD_TIMES, students: state.students.map(student => ({ student: student.student, grade: student.grade, hebrew_entitlement: student.required, shareWilling: student.shareWilling, candidates: student.candidates })) },
       teacherAvailability: { schemaVersion: 2, status: "project", teachers: state.teachers }
     };
-    localStorage.setItem(activeProjectKey, JSON.stringify(project));
-    window.name = `differential-project:${JSON.stringify(project)}`;
-    location.href = "index.html";
+    try {
+      const serialized = JSON.stringify(project);
+      localStorage.setItem(activeProjectKey, serialized);
+      window.name = `differential-project:${serialized}`;
+      location.href = "index.html";
+    } catch (_) {
+      elements.message.textContent = "לא ניתן לשמור את הפרויקט במכשיר. מומלץ לפנות מקום בדפדפן ולנסות שוב.";
+    }
   }
 
   elements.studentFile.addEventListener("change", loadStudentFile);
@@ -527,4 +552,5 @@
   document.querySelector("#studentTemplateButton").addEventListener("click", studentTemplate);
   document.querySelector("#teacherTemplateButton").addEventListener("click", teacherTemplate);
   showStep(0);
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

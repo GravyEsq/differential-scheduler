@@ -15,12 +15,17 @@
     const view = new DataView(buffer);
     const endOffset = findEndOfCentralDirectory(view);
     const entryCount = view.getUint16(endOffset + 10, true);
+    if (entryCount > 2000) throw new Error("קובץ ה-Excel מורכב מדי לקריאה בטוחה.");
     let offset = view.getUint32(endOffset + 16, true);
     const entries = new Map();
+    let totalUncompressedSize = 0;
     for (let index = 0; index < entryCount; index += 1) {
       if (view.getUint32(offset, true) !== 0x02014b50) throw new Error("לא ניתן לקרוא את תוכן קובץ ה-Excel.");
       const compression = view.getUint16(offset + 10, true);
       const compressedSize = view.getUint32(offset + 20, true);
+      const uncompressedSize = view.getUint32(offset + 24, true);
+      totalUncompressedSize += uncompressedSize;
+      if (uncompressedSize > 20 * 1024 * 1024 || totalUncompressedSize > 60 * 1024 * 1024) throw new Error("קובץ ה-Excel גדול מדי לאחר פתיחה.");
       const fileNameLength = view.getUint16(offset + 28, true);
       const extraLength = view.getUint16(offset + 30, true);
       const commentLength = view.getUint16(offset + 32, true);
@@ -106,6 +111,7 @@
 
   async function parseStudentSchedule(file) {
     if (!file?.name?.toLowerCase().endsWith(".xlsx")) throw new Error("יש לבחור קובץ Excel מסוג xlsx.");
+    if (file.size > 10 * 1024 * 1024) throw new Error("קובץ ה-Excel גדול מ־10MB. יש להעלות מערכת שעות בלבד.");
     const buffer = await file.arrayBuffer();
     const entries = readZipEntries(buffer);
     const [workbook, relationships, sharedDocument] = await Promise.all([
