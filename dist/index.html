@@ -15,6 +15,7 @@
       </div>
       <div class="topbar-actions">
         <a class="new-project-link" href="setup.html">פרויקט חדש</a>
+        <button id="privacyButton" class="privacy-badge" type="button">הנתונים נשמרים במכשיר בלבד</button>
         <div class="save-state" aria-live="polite">
           <span class="save-state-dot"></span>
           <span id="saveStateText">כל השינויים נשמרו במכשיר זה</span>
@@ -122,8 +123,9 @@
                 <button id="shareButton" class="secondary-button share-launch" type="button">שיבוץ זוגי</button>
                 <button id="constraintsButton" class="secondary-button" type="button">ניהול אילוצים</button>
                 <button id="locksButton" class="secondary-button" type="button">שיוכים קבועים</button>
-                <button id="exportButton" class="secondary-button" type="button">ייצוא פרויקט</button>
-                <button id="importButton" class="secondary-button" type="button">ייבוא פרויקט</button>
+                <button id="settingsButton" class="secondary-button" type="button">הגדרות הפרויקט</button>
+                <button id="exportButton" class="secondary-button" type="button">הורדת גיבוי</button>
+                <button id="importButton" class="secondary-button" type="button">שחזור מגיבוי</button>
                 <input id="importFile" type="file" accept=".json,application/json" hidden />
                 <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט</button>
                 <button id="resetButton" class="text-button" type="button">שחזור הגרסה הראשונית</button>
@@ -254,27 +256,34 @@
           <div><p class="eyebrow dark">מאגר תלמידים</p><h2 id="studentRegistryDialogTitle">קליטת תלמיד/ה</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
+        <div class="student-wizard-progress"><span id="studentWizardProgress">שלב 1 מתוך 6</span><div><i id="studentWizardBar"></i></div></div>
         <div class="registry-form">
-          <div class="form-grid registry-identity">
-            <label><span>שם מלא</span><input id="registryStudentName" autocomplete="off" required /></label>
-            <label><span>כיתה</span><input id="registryStudentGrade" autocomplete="off" placeholder="לדוגמה: יא5" required /></label>
-          </div>
-          <section class="basket-section">
-            <div class="basket-heading"><div><h3>סל אישי</h3><p>המקצועות שבהם התלמיד/ה מבקש/ת שעות חיזוק.</p></div><button id="addRequestRowButton" class="secondary-button" type="button">הוספת מקצוע</button></div>
-            <div id="requestRows" class="request-rows"></div>
-          </section>
-          <section class="schedule-upload-section">
-            <div><h3>מערכת שעות אישית</h3><p>העלאת קובץ Excel של מערכת התלמיד/ה מאפשרת לזהות חלונות, שעות מקצוע ושעות מחוץ למערכת.</p></div>
-            <label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
-            <div id="registryScheduleStatus" class="file-status">טרם נבחר קובץ.</div>
-          </section>
-          <label class="share-consent-row"><input id="registryShareWilling" type="checkbox" /><span>קיימת הסכמה לשיבוץ זוגי, אם תימצא התאמה מתאימה.</span></label>
+          <section class="student-wizard-step" data-student-step="0"><h3>מה שם התלמיד/ה?</h3><p>השם ישמש לזיהוי בכל התצוגות והדו״חות.</p><label class="wizard-single-field"><span>שם מלא</span><input id="registryStudentName" autocomplete="off" required /></label></section>
+          <section class="student-wizard-step" data-student-step="1" hidden><h3>באיזו כיתה?</h3><label class="wizard-single-field"><span>כיתה</span><input id="registryStudentGrade" autocomplete="off" placeholder="לדוגמה: יא5" required /></label></section>
+          <section class="student-wizard-step" data-student-step="2" hidden><div class="basket-heading"><div><h3>מה כולל הסל האישי?</h3><p>מקצוע ומספר שעות מבוקש.</p></div><button id="addRequestRowButton" class="secondary-button" type="button">הוספת מקצוע</button></div><div id="requestRows" class="request-rows"></div></section>
+          <section class="student-wizard-step" data-student-step="3" hidden><h3>נעלה את מערכת השעות</h3><p>כך נוכל לזהות חלונות ושעות מתאימות באופן אוטומטי.</p><label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div id="registryScheduleStatus" class="file-status">טרם נבחר קובץ.</div></section>
+          <section class="student-wizard-step" data-student-step="4" hidden><h3>האם קיימות החרגות לימודיות?</h3><p>אפשר לשנות אותן גם בהמשך.</p><label class="choice-card"><input id="registryAllowOtherLessons" type="checkbox" /><span><strong>אפשר לשבץ על חשבון שיעורים אחרים</strong><small>המערכת תציע זאת רק לאחר חלונות ושעות המקצוע.</small></span></label><label class="choice-card"><input id="registryNoPeriodZero" type="checkbox" /><span><strong>אין אפשרות להגיע בשעה 0</strong><small>השעה תיחסם לחלוטין עבור התלמיד/ה.</small></span></label></section>
+          <section class="student-wizard-step" data-student-step="5" hidden><h3>העדפות נוספות</h3><label class="choice-card"><input id="registryShareWilling" type="checkbox" /><span><strong>אפשר להציע שיבוץ זוגי</strong><small>כל הצעה תחייב אישור לפני השיבוץ.</small></span></label><label class="wizard-single-field"><span>הערה לצוות (רשות)</span><textarea id="registryExceptionNotes" rows="3" placeholder="למשל: להימנע מיום חמישי בשעה האחרונה"></textarea></label></section>
         </div>
         <div class="dialog-actions">
-          <button id="saveRegistryStudentButton" class="primary-button" type="button">שמירת התלמיד/ה</button>
+          <button id="studentWizardBack" class="secondary-button" type="button" hidden>חזרה</button>
+          <button id="studentWizardNext" class="primary-button" type="button">המשך</button>
+          <button id="saveRegistryStudentButton" class="primary-button" type="button" hidden>שמירת התלמיד/ה</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="studentDetailDialog" class="edit-dialog student-detail-dialog">
+      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">כרטיס תלמיד/ה</p><h2 id="studentDetailTitle">—</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div id="studentDetailContent" class="student-detail-content"></div><div class="dialog-actions"><button id="editStudentFromDetail" class="primary-button" type="button">עריכת פרטים</button><button class="secondary-button" value="cancel">סגירה</button></div></form>
+    </dialog>
+
+    <dialog id="settingsDialog" class="edit-dialog settings-dialog">
+      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות הפרויקט</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="9" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 9" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
+    </dialog>
+
+    <dialog id="privacyDialog" class="edit-dialog privacy-dialog">
+      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">שמירה ופרטיות</p><h2>הנתונים נשארים במכשיר</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="privacy-content"><p>שמות התלמידים, מערכות השעות והשיבוצים נשמרים באחסון המקומי של הדפדפן. האתר אינו שולח אותם לשרת.</p><div class="privacy-callout"><strong>כדי לא לאבד מידע</strong><span>מומלץ להוריד גיבוי בסיום כל יום עבודה ולשמור אותו בכונן מאובטח של בית הספר.</span></div><p id="lastBackupText">טרם הורד גיבוי מהמכשיר הזה.</p></div><div class="dialog-actions"><button id="privacyBackupButton" class="primary-button" type="button">הורדת גיבוי עכשיו</button><button class="secondary-button" value="cancel">סגירה</button></div></form>
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

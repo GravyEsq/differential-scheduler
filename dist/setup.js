@@ -14,7 +14,7 @@
   const TEACHER_REQUIRED_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
   const TEACHER_HEADERS = [...TEACHER_REQUIRED_HEADERS, "שעות הוראה קבועות ביום"];
   const activeProjectKey = "differential-active-project-v1";
-  const state = { students: null, teachers: null, studentErrors: [], teacherErrors: [] };
+  const state = { students: [], teachers: null, studentErrors: [], teacherErrors: [], step: 0 };
 
   const elements = {
     form: document.querySelector("#projectForm"),
@@ -31,6 +31,10 @@
     teacherStatus: document.querySelector("#teacherFileStatus"),
     review: document.querySelector("#setupReview"),
     create: document.querySelector("#createProjectButton"),
+    next: document.querySelector("#wizardNextButton"),
+    back: document.querySelector("#wizardBackButton"),
+    progressText: document.querySelector("#wizardProgressText"),
+    progressBar: document.querySelector("#wizardProgressBar"),
     toast: document.querySelector("#toast")
   };
 
@@ -368,7 +372,7 @@
     const aliases = [...new Set([subject, ...splitList(elements.aliases.value)])].filter(Boolean);
     return {
       id: `project-${Date.now()}-${subject.replace(/\s+/g, "-")}`,
-      school: clean(elements.school.value), year: clean(elements.year.value), team: clean(elements.team.value), subject, aliases,
+      school: clean(elements.school.value), year: clean(elements.year.value), team: clean(elements.team.value) || `צוות ${subject}`, subject, aliases,
       lastPeriod: Number(elements.lastPeriod.value), avoidPeriods: parsePeriods(elements.avoidPeriods.value)
     };
   }
@@ -420,15 +424,50 @@
 
   function updateReview() {
     const errors = [...state.studentErrors, ...state.teacherErrors, ...crossErrors()];
-    const formReady = elements.form.checkValidity() && state.students?.length && state.teachers?.length && !errors.length;
+    const formReady = Boolean(clean(elements.school.value) && clean(elements.subject.value) && state.teachers?.length && !errors.length);
     elements.create.disabled = !formReady;
-    if (!state.students || !state.teachers) {
-      elements.review.textContent = "יש לבחור את שני קובצי הנתונים.";
+    if (!state.teachers) {
+      elements.review.textContent = "יש להשלים את קובץ המורים לפני פתיחת הפרויקט.";
       return;
     }
     const required = state.students.reduce((sum, item) => sum + item.required, 0);
     const capacity = state.teachers.reduce((sum, item) => sum + item.quota, 0);
-    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת צוות מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">הנתונים תקינים. ניתן להפיק הצעת שיבוץ ראשונית.</p>`}`;
+    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים שנקלטו</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת צוות מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">${state.students.length ? "הנתונים תקינים. ניתן להפיק הצעת שיבוץ ראשונית." : "הפרויקט ייפתח ללא תלמידים. אפשר לקלוט אותם אחר כך מתוך מאגר התלמידים."}</p>`}`;
+  }
+
+  function showStep(index) {
+    state.step = Math.max(0, Math.min(3, index));
+    document.querySelectorAll(".wizard-step").forEach((step, stepIndex) => {
+      const active = stepIndex === state.step;
+      step.hidden = !active;
+      step.classList.toggle("active", active);
+    });
+    elements.progressText.textContent = `שלב ${state.step + 1} מתוך 4`;
+    elements.progressBar.style.width = `${(state.step + 1) * 25}%`;
+    elements.back.hidden = state.step === 0;
+    elements.next.hidden = state.step === 3;
+    elements.create.hidden = state.step !== 3;
+    if (state.step === 3) updateReview();
+    document.querySelector(`.wizard-step[data-step="${state.step}"] input:not([type="file"])`)?.focus();
+  }
+
+  function canContinue() {
+    if (state.step === 0) {
+      if (!clean(elements.subject.value) || !clean(elements.school.value)) {
+        elements.form.reportValidity();
+        return false;
+      }
+    }
+    if (state.step === 1 && state.studentErrors.length) {
+      elements.studentStatus.textContent = `יש לתקן את הקובץ לפני שממשיכים: ${state.studentErrors[0]}`;
+      return false;
+    }
+    if (state.step === 2 && (!state.teachers?.length || state.teacherErrors.length)) {
+      elements.teacherStatus.textContent = state.teacherErrors[0] || "יש לבחור קובץ מורים תקין כדי להמשיך.";
+      elements.teacherStatus.className = "file-status error";
+      return false;
+    }
+    return true;
   }
 
   function downloadCsv(filename, headers, rows) {
@@ -483,6 +522,9 @@
     if (elements.teacherFile.files.length) await loadTeacherFile();
   }));
   elements.form.addEventListener("submit", createProject);
+  elements.next.addEventListener("click", () => { if (canContinue()) showStep(state.step + 1); });
+  elements.back.addEventListener("click", () => showStep(state.step - 1));
   document.querySelector("#studentTemplateButton").addEventListener("click", studentTemplate);
   document.querySelector("#teacherTemplateButton").addEventListener("click", teacherTemplate);
+  showStep(0);
 })();

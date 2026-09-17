@@ -41,6 +41,7 @@
   const shareStorageKey = `differential-project-${projectId}-share-v1`;
   const historyStorageKey = `differential-project-${projectId}-history-v1`;
   const registryStorageKey = "differential-student-registry-v1";
+  const lastBackupKey = "differential-last-backup-v1";
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
@@ -50,6 +51,8 @@
   let studentRegistry = loadStudentRegistry();
   let undoHistory = loadUndoHistory();
   let activeRegistryStudentId = null;
+  let studentWizardStep = 0;
+  let detailStudentId = null;
   let pendingRegistrySchedule = null;
   let activeAssignmentId = null;
   let activeView = "schedule";
@@ -112,6 +115,20 @@
     registryShareWilling: document.querySelector("#registryShareWilling"),
     saveRegistryStudentButton: document.querySelector("#saveRegistryStudentButton"),
     addRequestRowButton: document.querySelector("#addRequestRowButton"),
+    studentWizardProgress: document.querySelector("#studentWizardProgress"),
+    studentWizardBar: document.querySelector("#studentWizardBar"),
+    studentWizardBack: document.querySelector("#studentWizardBack"),
+    studentWizardNext: document.querySelector("#studentWizardNext"),
+    registryAllowOtherLessons: document.querySelector("#registryAllowOtherLessons"),
+    registryNoPeriodZero: document.querySelector("#registryNoPeriodZero"),
+    registryExceptionNotes: document.querySelector("#registryExceptionNotes"),
+    studentDetailDialog: document.querySelector("#studentDetailDialog"),
+    studentDetailTitle: document.querySelector("#studentDetailTitle"),
+    studentDetailContent: document.querySelector("#studentDetailContent"),
+    editStudentFromDetail: document.querySelector("#editStudentFromDetail"),
+    settingsDialog: document.querySelector("#settingsDialog"),
+    privacyDialog: document.querySelector("#privacyDialog"),
+    lastBackupText: document.querySelector("#lastBackupText"),
     toast: document.querySelector("#toast")
   };
 
@@ -196,7 +213,8 @@
         schedule: null,
         progress: { [projectMeta.subject || "מקצוע"]: { assigned: student.assigned || 0 } },
         source: "project",
-        projectStudentName: student.student
+        projectStudentName: student.student,
+        exceptions: { allowOtherLessons: false, noPeriodZero: false, notes: "" }
       });
     });
     return [...byName.values()];
@@ -401,6 +419,8 @@
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
       if (isConstrained("student", item.student, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ זמינות שהוגדר`);
       if (isConstrained("teacher", item.teacher, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.teacher} אינו תואם לאילוץ זמינות שהוגדר`);
+      const registryRecord = studentRegistry.find(record => record.fullName === item.student);
+      if (registryRecord?.exceptions?.noPeriodZero && item.period === 0) hardErrors.push(`ל${item.student} הוגדרה החרגה שאינה מאפשרת שיבוץ בשעה 0`);
     });
     const studentSlotKeys = new Set();
     const teacherSlots = new Map();
@@ -528,13 +548,14 @@
       .sort((a, b) => a.fullName.localeCompare(b.fullName, "he"));
     const cards = records.map(record => {
       const chips = (record.requests || []).map(request => {
-        const assigned = record.progress?.[request.subject]?.assigned ?? 0;
+        const assigned = record.progress?.[request.subject]?.assigned ?? (subjectMatchesProject(request.subject) ? record.progress?.[projectMeta.subject]?.assigned : 0) ?? 0;
         return `<span class="basket-chip">${esc(request.subject)} · ${assigned}/${request.hours} שעות</span>`;
       }).join("");
       const scheduleText = record.schedule?.timetable?.length
         ? `<span class="schedule-ready">מערכת שעות נקלטה</span>`
         : `<span class="schedule-missing">נדרשת העלאת מערכת שעות</span>`;
-      return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}</p></div><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button></article>`;
+      const exceptionLabels = [record.exceptions?.allowOtherLessons ? "אפשר שיבוץ על חשבון שיעור" : "", record.exceptions?.noPeriodZero ? "ללא שעה 0" : ""].filter(Boolean);
+      return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}${exceptionLabels.length ? ` · ${esc(exceptionLabels.join(" · "))}` : ""}</p></div><div class="registry-actions"><button class="primary-button" data-view-registry="${esc(record.id)}" type="button">פתיחת כרטיס</button><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button></div></article>`;
     }).join("");
     elements.registryView.innerHTML = `<section class="registry-view"><div class="registry-view-head"><div><p class="eyebrow dark">ניהול הסל האישי</p><h2>מאגר תלמידים</h2><p>ריכוז זכאויות, מערכות שעות ומצב המענה בכל המקצועות.</p></div><button class="primary-button" data-new-registry type="button">קליטת תלמיד/ה</button></div><div class="registry-list">${cards || "<div class='registry-empty'><strong>המאגר עדיין ריק.</strong><p>אפשר לקלוט תלמיד או תלמידה ולהעלות את מערכת השעות שלהם.</p></div>"}</div></section>`;
   }
@@ -1165,6 +1186,9 @@
     elements.registryStudentName.value = record?.fullName || "";
     elements.registryStudentGrade.value = record?.grade || "";
     elements.registryShareWilling.checked = Boolean(record?.shareWilling);
+    elements.registryAllowOtherLessons.checked = Boolean(record?.exceptions?.allowOtherLessons);
+    elements.registryNoPeriodZero.checked = Boolean(record?.exceptions?.noPeriodZero);
+    elements.registryExceptionNotes.value = record?.exceptions?.notes || "";
     elements.requestRows.innerHTML = "";
     const requests = record?.requests?.length ? record.requests : [{ subject: projectMeta.subject === "שיבוצים" ? "" : projectMeta.subject, hours: 1 }];
     requests.forEach(addRequestRow);
@@ -1172,8 +1196,43 @@
     elements.registryScheduleStatus.textContent = pendingRegistrySchedule
       ? `המערכת שנקלטה: ${pendingRegistrySchedule.fileName || "קובץ Excel"}`
       : "טרם נבחר קובץ.";
+    showStudentWizardStep(0);
     elements.studentRegistryDialog.showModal();
     elements.registryStudentName.focus();
+  }
+
+  function showStudentWizardStep(index) {
+    studentWizardStep = Math.max(0, Math.min(5, index));
+    document.querySelectorAll("[data-student-step]").forEach((step, stepIndex) => {
+      const active = stepIndex === studentWizardStep;
+      step.hidden = !active;
+      step.classList.toggle("active", active);
+    });
+    elements.studentWizardProgress.textContent = `שלב ${studentWizardStep + 1} מתוך 6`;
+    elements.studentWizardBar.style.width = `${((studentWizardStep + 1) / 6) * 100}%`;
+    elements.studentWizardBack.hidden = studentWizardStep === 0;
+    elements.studentWizardNext.hidden = studentWizardStep === 5;
+    elements.saveRegistryStudentButton.hidden = studentWizardStep !== 5;
+    document.querySelector(`[data-student-step="${studentWizardStep}"] input:not([type="file"])`)?.focus();
+  }
+
+  function studentWizardCanContinue() {
+    if (studentWizardStep === 0 && !elements.registryStudentName.value.trim()) {
+      alert("יש להזין שם מלא כדי להמשיך.");
+      return false;
+    }
+    if (studentWizardStep === 1 && !elements.registryStudentGrade.value.trim()) {
+      alert("יש להזין כיתה כדי להמשיך.");
+      return false;
+    }
+    if (studentWizardStep === 2) {
+      try { readRegistryRequests(); } catch (error) { alert(error.message); return false; }
+    }
+    if (studentWizardStep === 3 && !pendingRegistrySchedule && !activeRegistryStudentId) {
+      alert("יש להעלות מערכת שעות כדי להמשיך. כך המערכת תוכל להציע שעות מתאימות.");
+      return false;
+    }
+    return true;
   }
 
   function readRegistryRequests() {
@@ -1219,7 +1278,9 @@
         else if (!lesson && row.period > first && row.period < last) category = "חלון";
         else if (!lesson && row.period === first - 1) category = "קצה לפני";
         else if (!lesson && row.period === last + 1) category = "קצה אחרי";
+        else if (lesson && record.exceptions?.allowOtherLessons) category = "דריסת שיעור";
         if (!category) return;
+        if (record.exceptions?.noPeriodZero && row.period === 0) return;
         const range = timeRangeForPeriod(row.period, timetable);
         candidates.push({ day, period: row.period, ...range, category, replaces_student_lesson: category === "שיעור במקצוע" ? lesson : null });
       });
@@ -1300,7 +1361,12 @@
         schedule: pendingRegistrySchedule,
         progress: existing?.progress || {},
         source: existing?.source || "registry",
-        projectStudentName: existing?.projectStudentName || (existing?.source === "project" ? existing.fullName : null)
+        projectStudentName: existing?.projectStudentName || (existing?.source === "project" ? existing.fullName : null),
+        exceptions: {
+          allowOtherLessons: elements.registryAllowOtherLessons.checked,
+          noPeriodZero: elements.registryNoPeriodZero.checked,
+          notes: elements.registryExceptionNotes.value.trim()
+        }
       };
       if (existing) studentRegistry[studentRegistry.indexOf(existing)] = record;
       else studentRegistry.push(record);
@@ -1312,6 +1378,75 @@
     } catch (error) {
       alert(error instanceof Error ? error.message : "לא ניתן לשמור את פרטי התלמיד/ה.");
     }
+  }
+
+  function openStudentDetail(recordId) {
+    const record = studentRegistry.find(item => item.id === recordId);
+    if (!record) return;
+    detailStudentId = record.id;
+    elements.studentDetailTitle.textContent = `${record.fullName} · ${record.grade}`;
+    const studentAssignments = lessonsForStudent(record.fullName);
+    const assignmentBySlot = new Map(studentAssignments.map(item => [`${item.day}-${item.period}`, item]));
+    const timetable = record.schedule?.timetable || [];
+    const timetableByPeriod = new Map(timetable.map(row => [row.period, row]));
+    const rows = [...Array(10).keys()].map(period => {
+      const row = timetableByPeriod.get(period);
+      const cells = days.map(day => {
+        const lesson = row?.lessons?.[day] || "";
+        const support = assignmentBySlot.get(`${day}-${period}`);
+        return `<td class="${support ? "support-cell" : ""}">${support ? `<strong>${esc(projectMeta.subject)}</strong><small>${esc(support.teacher)}</small>` : esc(lesson) || "—"}</td>`;
+      }).join("");
+      return `<tr><th>שעה ${period}<small>${esc(timeRangeForPeriod(period, timetable).start)}</small></th>${cells}</tr>`;
+    }).join("");
+    const requests = (record.requests || []).map(request => {
+      const assigned = record.progress?.[request.subject]?.assigned ?? (subjectMatchesProject(request.subject) ? record.progress?.[projectMeta.subject]?.assigned : 0) ?? 0;
+      return `<li><strong>${esc(request.subject)}</strong><span>${assigned} מתוך ${request.hours} שעות שובצו</span></li>`;
+    }).join("");
+    const assignmentsList = studentAssignments.length ? studentAssignments.map(item => `<li>${esc(item.day)}, שעה ${item.period} · ${esc(item.teacher)}</li>`).join("") : "<li>טרם נקבעו שעות בפרויקט הנוכחי.</li>";
+    const exceptions = [record.exceptions?.allowOtherLessons ? "ניתן לשבץ על חשבון שיעורים אחרים" : "", record.exceptions?.noPeriodZero ? "שעה 0 חסומה" : "", record.exceptions?.notes || ""].filter(Boolean);
+    elements.studentDetailContent.innerHTML = `<section class="detail-summary"><div><h3>בקשות מהסל האישי</h3><ul>${requests || "<li>לא הוגדרו בקשות.</li>"}</ul></div><div><h3>שיבוצים בפרויקט הנוכחי</h3><ul>${assignmentsList}</ul></div></section>${exceptions.length ? `<section class="detail-exceptions"><h3>החרגות והערות</h3><p>${esc(exceptions.join(" · "))}</p></section>` : ""}<section class="detail-timetable"><h3>מערכת שבועית</h3>${timetable.length ? `<div class="detail-table-wrap"><table><thead><tr><th>שעה</th>${days.map(day => `<th>${day}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : "<p>טרם הועלתה מערכת שעות אישית.</p>"}</section>`;
+    elements.studentDetailDialog.showModal();
+  }
+
+  function openSettingsDialog() {
+    document.querySelector("#settingsSchool").value = projectMeta.school || "";
+    document.querySelector("#settingsYear").value = projectMeta.year || "";
+    document.querySelector("#settingsTeam").value = projectMeta.team || "";
+    document.querySelector("#settingsSubject").value = projectMeta.subject || "";
+    document.querySelector("#settingsAliases").value = (projectMeta.aliases || []).filter(item => item !== projectMeta.subject).join(", ");
+    document.querySelector("#settingsLastPeriod").value = projectMeta.lastPeriod ?? 9;
+    document.querySelector("#settingsAvoidPeriods").value = (projectMeta.avoidPeriods || []).join(", ");
+    elements.settingsDialog.showModal();
+  }
+
+  function saveProjectSettings() {
+    const subject = document.querySelector("#settingsSubject").value.trim();
+    if (!subject) return alert("יש להזין מקצוע.");
+    projectMeta.school = document.querySelector("#settingsSchool").value.trim();
+    projectMeta.year = document.querySelector("#settingsYear").value.trim();
+    projectMeta.team = document.querySelector("#settingsTeam").value.trim();
+    projectMeta.subject = subject;
+    projectMeta.aliases = [...new Set([subject, ...document.querySelector("#settingsAliases").value.split(",").map(item => item.trim()).filter(Boolean)])];
+    projectMeta.lastPeriod = Number(document.querySelector("#settingsLastPeriod").value) || 9;
+    projectMeta.avoidPeriods = document.querySelector("#settingsAvoidPeriods").value.split(",").map(Number).filter(Number.isInteger);
+    payload.meta = projectMeta;
+    localStorage.setItem(activeProjectKey, JSON.stringify(payload));
+    document.querySelector("#projectEyebrow").textContent = `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
+    document.querySelector("#projectTitle").textContent = `שיבוצי ${projectMeta.subject} דיפרנציאליים`;
+    elements.settingsDialog.close();
+    renderAll();
+    showToast("הגדרות הפרויקט נשמרו.");
+  }
+
+  function updateBackupMessage() {
+    const value = localStorage.getItem(lastBackupKey);
+    elements.lastBackupText.textContent = value
+      ? `הגיבוי האחרון הורד ב־${new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value))}.`
+      : "טרם הורד גיבוי מהמכשיר הזה.";
+    const backupAge = value ? Date.now() - new Date(value).getTime() : Number.POSITIVE_INFINITY;
+    const badge = document.querySelector("#privacyButton");
+    badge.classList.toggle("backup-due", backupAge > 7 * 24 * 60 * 60 * 1000);
+    badge.textContent = backupAge > 7 * 24 * 60 * 60 * 1000 ? "מומלץ להוריד גיבוי" : "הנתונים נשמרים במכשיר בלבד";
   }
 
   function renderAll() {
@@ -1377,7 +1512,9 @@
     link.download = `פרויקט-שיבוצי-${projectMeta.subject || "דיפרנציאלי"}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
-    showToast("קובץ הפרויקט יוצא בהצלחה.");
+    localStorage.setItem(lastBackupKey, new Date().toISOString());
+    updateBackupMessage();
+    showToast("הגיבוי הורד למחשב בהצלחה.");
   }
 
   function validateBackupFile(data) {
@@ -1415,6 +1552,7 @@
       if (parsed?.kind === "differential-scheduling-project" && parsed.schedule && parsed.studentAvailability && parsed.teacherAvailability) {
         const projectName = parsed.meta?.team || parsed.meta?.subject || "הפרויקט החדש";
         if (!confirm(`לטעון את ${projectName} במקום הפרויקט המוצג כעת?`)) return;
+        if (Array.isArray(parsed.studentRegistry)) localStorage.setItem(registryStorageKey, JSON.stringify(parsed.studentRegistry));
         localStorage.setItem(activeProjectKey, JSON.stringify(parsed));
         location.reload();
         return;
@@ -1534,6 +1672,11 @@
       openRegistryDialog(editRegistryTarget.dataset.editRegistry);
       return;
     }
+    const viewRegistryTarget = event.target.closest("[data-view-registry]");
+    if (viewRegistryTarget) {
+      openStudentDetail(viewRegistryTarget.dataset.viewRegistry);
+      return;
+    }
     const addTarget = event.target.closest("[data-add-student]");
     if (addTarget) {
       openAddDialog(addTarget.dataset.addStudent);
@@ -1593,9 +1736,20 @@
     const [file] = elements.registryScheduleFile.files;
     await readRegistrySchedule(file);
   });
+  elements.studentWizardNext.addEventListener("click", () => { if (studentWizardCanContinue()) showStudentWizardStep(studentWizardStep + 1); });
+  elements.studentWizardBack.addEventListener("click", () => showStudentWizardStep(studentWizardStep - 1));
   elements.saveRegistryStudentButton.addEventListener("click", saveRegistryStudent);
+  elements.editStudentFromDetail.addEventListener("click", () => {
+    elements.studentDetailDialog.close();
+    openRegistryDialog(detailStudentId);
+  });
+  document.querySelector("#settingsButton").addEventListener("click", openSettingsDialog);
+  document.querySelector("#saveSettingsButton").addEventListener("click", saveProjectSettings);
+  document.querySelector("#privacyButton").addEventListener("click", () => { updateBackupMessage(); elements.privacyDialog.showModal(); });
+  document.querySelector("#privacyBackupButton").addEventListener("click", exportDraft);
 
   studentRegistry.forEach(record => syncRecordWithCurrentProject(record, record.projectStudentName));
+  updateBackupMessage();
   renderAll();
   registerWebMcpTools();
 })();
