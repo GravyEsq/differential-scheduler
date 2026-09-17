@@ -533,7 +533,7 @@
       const serialized = JSON.stringify(project);
       localStorage.setItem(activeProjectKey, serialized);
       window.name = `differential-project:${serialized}`;
-      location.href = "index.html";
+      location.href = "app.html";
     } catch (_) {
       elements.message.textContent = "לא ניתן לשמור את הפרויקט במכשיר. מומלץ לפנות מקום בדפדפן ולנסות שוב.";
     }

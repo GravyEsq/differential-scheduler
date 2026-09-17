@@ -3,297 +3,76 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="מערכת מקומית לבניית שיבוצי שעות דיפרנציאליות" />
-    <meta name="theme-color" content="#183b65" />
+    <meta name="description" content="מערכת בית־ספרית לניהול סל אישי ושיבוץ שעות דיפרנציאליות" />
+    <meta name="theme-color" content="#17395f" />
     <link rel="manifest" href="manifest.webmanifest" />
     <title>מערכת שיבוצים דיפרנציאליים</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
-    <a class="skip-link" href="#mainContent">דילוג לתוכן הראשי</a>
-    <header class="topbar">
-      <div>
-        <p id="projectEyebrow" class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
-        <h1 id="projectTitle">פרויקט חדש</h1>
-      </div>
-      <div class="topbar-actions">
-        <a class="new-project-link" href="setup.html">פרויקט חדש</a>
-        <button id="privacyButton" class="privacy-badge" type="button">הנתונים נשמרים במכשיר בלבד</button>
-        <div class="save-state" aria-live="polite">
-          <span class="save-state-dot"></span>
-          <span id="saveStateText">כל השינויים נשמרו במכשיר זה</span>
-        </div>
-        <button id="undoButton" class="undo-button" type="button" disabled>ביטול פעולה אחרונה</button>
-      </div>
+  <body class="landing-page">
+    <a class="skip-link" href="#landingMain">דילוג לתוכן הראשי</a>
+
+    <header class="landing-header">
+      <a class="landing-brand" href="index.html" aria-label="מערכת שיבוצים דיפרנציאליים — עמוד הבית">
+        <span class="landing-mark" aria-hidden="true">ש</span>
+        <span><strong>שיבוץ דיפרנציאלי</strong><small>ניהול הסל האישי בבית הספר</small></span>
+      </a>
+      <nav class="landing-nav" aria-label="ניווט ראשי">
+        <a href="#howItWorks">איך זה עובד</a>
+        <a href="#privacy">שמירה ופרטיות</a>
+        <a class="landing-nav-button" href="app.html">כניסה למערכת</a>
+      </nav>
     </header>
 
-    <main id="mainContent" tabindex="-1">
-      <section id="emptyProjectState" class="empty-project-state" hidden>
-        <div>
-          <p class="eyebrow dark">אין נתונים במערכת</p>
-          <h2>טענו קובץ פרויקט או התחילו פרויקט חדש</h2>
-          <p>הנתונים נקראים ונשמרים בדפדפן של המכשיר הזה בלבד. הם אינם נשלחים לאתר או נשמרים בשרת.</p>
+    <main id="landingMain" tabindex="-1">
+      <section class="landing-hero" aria-labelledby="landingTitle">
+        <div class="landing-hero-copy">
+          <p class="landing-kicker">תכנון מדויק. מעקב פשוט. מידע שנשאר אצלכם.</p>
+          <h1 id="landingTitle">כל השעות הדיפרנציאליות,<br />במקום אחד ברור</h1>
+          <p class="landing-lead">המערכת מרכזת את צורכי התלמידים, מערכות השעות וזמינות הצוות—ומסייעת למצוא שיבוץ מתאים בלי לאבד שליטה על הפרטים.</p>
+          <div class="landing-actions">
+            <a class="landing-primary" href="app.html">כניסה למערכת <span aria-hidden="true">←</span></a>
+            <a class="landing-secondary" href="setup.html">יצירת פרויקט חדש</a>
+          </div>
+          <p class="landing-trust"><span aria-hidden="true">✓</span> פרטי התלמידים נשמרים במכשיר בלבד ואינם נשלחים לשרת</p>
         </div>
-        <div class="empty-project-actions">
-          <button id="emptyImportButton" class="primary-button" type="button">טעינת קובץ פרויקט</button>
-          <a class="secondary-button button-link" href="setup.html">יצירת פרויקט חדש</a>
+
+        <div class="landing-preview" aria-label="המחשה של תהליך השיבוץ">
+          <div class="preview-heading"><span>תמונת מצב</span><strong>השיבוץ השבועי</strong></div>
+          <div class="preview-stats">
+            <div><strong>24</strong><span>שעות שובצו</span></div>
+            <div><strong>3</strong><span>נושאים לבדיקה</span></div>
+          </div>
+          <div class="preview-schedule" aria-hidden="true">
+            <span class="preview-day">א׳</span><span class="preview-day">ב׳</span><span class="preview-day">ג׳</span><span class="preview-day">ד׳</span>
+            <i class="slot teal"></i><i class="slot"></i><i class="slot amber"></i><i class="slot"></i>
+            <i class="slot"></i><i class="slot blue"></i><i class="slot"></i><i class="slot teal"></i>
+            <i class="slot blue"></i><i class="slot"></i><i class="slot teal"></i><i class="slot"></i>
+          </div>
+          <div class="preview-note"><span class="preview-check" aria-hidden="true">✓</span><span><strong>נמצאה חלופה מתאימה</strong><small>חלון לתלמידה ושעה פנויה למורה</small></span></div>
         </div>
       </section>
 
-      <section id="nextActionPanel" class="next-action-panel" hidden aria-labelledby="nextActionTitle">
-        <div class="next-action-copy">
-          <p class="eyebrow dark">הפעולה הבאה</p>
-          <h2 id="nextActionTitle">—</h2>
-          <p id="nextActionDescription">—</p>
+      <section id="howItWorks" class="landing-section" aria-labelledby="howTitle">
+        <div class="landing-section-head">
+          <p class="landing-kicker">תהליך עבודה מונחה</p>
+          <h2 id="howTitle">מהקליטה ועד למערכת מוכנה</h2>
+          <p>המערכת מובילה את הצוות שלב אחר שלב, ומציגה בכל רגע רק את מה שנדרש להחלטה הבאה.</p>
         </div>
-        <div class="next-action-buttons">
-          <button id="nextActionButton" class="primary-button" type="button">המשך טיפול</button>
-          <button id="reviewWarningsButton" class="secondary-button" type="button">הצגת נושאים לבדיקה</button>
+        <div class="landing-steps">
+          <article><span>01</span><h3>מרכזים את הנתונים</h3><p>קולטים תלמידים, סל אישי, מערכות שעות וזמינות מורים.</p></article>
+          <article><span>02</span><h3>בונים שיבוץ</h3><p>המערכת מעדיפה חלונות, שיעורי מקצוע, ורק לבסוף שעות קצה.</p></article>
+          <article><span>03</span><h3>בודקים ומעדכנים</h3><p>משווים חלופות, מוסיפים אילוצים ומבצעים התאמות ידניות בעת הצורך.</p></article>
         </div>
       </section>
 
-      <section id="summarySection" class="summary" aria-label="סיכום השיבוץ">
-        <article><strong id="assignedCount">—</strong><span>שעות משובצות</span></article>
-        <article><strong id="studentCount">—</strong><span>תלמידים עם שיבוץ</span></article>
-        <article><strong id="missingCount">—</strong><span>שעות זכאות שטרם שובצו</span></article>
-        <article><strong id="lateCount">—</strong><span>שיבוצים בשעה האחרונה</span></article>
-      </section>
-
-      <nav id="viewTabs" class="view-tabs" aria-label="בחירת תצוגה" role="tablist">
-        <button id="scheduleTab" class="view-tab active" data-view="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView" tabindex="0">מערכת שבועית</button>
-        <button id="studentsTab" class="view-tab" data-view="students" type="button" role="tab" aria-selected="false" aria-controls="studentsView" tabindex="-1">לפי תלמידים</button>
-        <button id="teachersTab" class="view-tab" data-view="teachers" type="button" role="tab" aria-selected="false" aria-controls="teachersView" tabindex="-1">לפי צוות</button>
-        <button id="registryTab" class="view-tab" data-view="registry" type="button" role="tab" aria-selected="false" aria-controls="registryView" tabindex="-1">מאגר תלמידים</button>
-      </nav>
-
-      <section id="workspaceSection" class="workspace">
-        <div class="board-panel">
-          <div class="toolbar">
-            <div>
-              <h2 id="toolbarTitle">מערכת שבועית</h2>
-              <p id="toolbarDescription">מוצגים השיבוצים התואמים למסננים הפעילים.</p>
-            </div>
-            <div class="toolbar-controls">
-              <label id="searchControl" class="search-box">
-                <span class="sr-only">חיפוש תלמיד</span>
-                <input id="studentSearch" type="search" placeholder="חיפוש תלמיד/ה" autocomplete="off" />
-              </label>
-              <label id="teacherFilterControl" class="teacher-filter">
-                <span>הצגה</span>
-                <select id="teacherFilter" aria-label="סינון לפי מורה">
-                  <option value="all">כל הצוות</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div id="scheduleView" class="content-view" role="tabpanel" aria-labelledby="scheduleTab">
-            <div class="schedule-legend" aria-label="מקרא">
-              <span><i class="dot grade-yod-dot"></i> שכבת י׳</span>
-              <span><i class="dot grade-yod-aleph-dot"></i> שכבת י״א</span>
-              <span><i class="dot edge-dot"></i> שעת קצה</span>
-              <span class="hint">לחיצה על שיבוץ פותחת אפשרויות שינוי</span>
-            </div>
-            <div class="schedule-wrap">
-              <div id="scheduleGrid" class="schedule-grid" role="grid" aria-label="מערכת שיבוצים שבועית"></div>
-            </div>
-          </div>
-          <div id="studentsView" class="content-view" role="tabpanel" aria-labelledby="studentsTab" hidden></div>
-          <div id="teachersView" class="content-view" role="tabpanel" aria-labelledby="teachersTab" hidden></div>
-          <div id="registryView" class="content-view" role="tabpanel" aria-labelledby="registryTab" hidden></div>
-        </div>
-
-        <aside id="attentionPanel" class="side-panel" tabindex="-1">
-          <div class="side-heading">
-            <span class="warning-icon" aria-hidden="true">!</span>
-            <div><h2>נושאים לבדיקה</h2><p>שעות זכאות שטרם שובצו.</p></div>
-          </div>
-          <div id="missingList"></div>
-          <section class="load-section">
-            <h3>הקצאת שעות הצוות</h3>
-            <div id="teacherLoads"></div>
-          </section>
-          <div class="rule-note">
-            <strong>בקרת שיבוץ</strong>
-            <div id="validationList" class="validation-list"></div>
-          </div>
-          <div class="side-actions">
-            <button id="manualButton" class="primary-button" type="button">שיבוץ ידני</button>
-            <button id="reportButton" class="primary-button" type="button">הפקת דו״ח</button>
-            <details class="management-menu">
-              <summary>ניהול וכלים</summary>
-              <div class="management-actions">
-                <button id="swapButton" class="secondary-button swap-launch" type="button">הצעות להחלפה</button>
-                <button id="shareButton" class="secondary-button share-launch" type="button">שיבוץ זוגי</button>
-                <button id="constraintsButton" class="secondary-button" type="button">ניהול אילוצים</button>
-                <button id="locksButton" class="secondary-button" type="button">שיוכים קבועים</button>
-                <button id="settingsButton" class="secondary-button" type="button">הגדרות הפרויקט</button>
-                <button id="exportButton" class="secondary-button" type="button">הורדת גיבוי</button>
-                <button id="importButton" class="secondary-button" type="button">שחזור מגיבוי</button>
-                <input id="importFile" type="file" accept=".json,application/json" hidden />
-                <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט</button>
-                <button id="resetButton" class="text-button" type="button">שחזור הגרסה הראשונית</button>
-              </div>
-            </details>
-          </div>
-        </aside>
+      <section id="privacy" class="landing-privacy" aria-labelledby="privacyTitle">
+        <div class="privacy-symbol" aria-hidden="true">✓</div>
+        <div><p class="landing-kicker">פרטיות כברירת מחדל</p><h2 id="privacyTitle">המידע הרגיש נשאר בבית הספר</h2><p>שמות התלמידים, המערכות והשיבוצים נשמרים באחסון המקומי של הדפדפן. אפשר להוריד גיבוי ולשמור אותו בכונן המאובטח של בית הספר.</p></div>
+        <a class="landing-secondary" href="app.html">מעבר לסביבת העבודה</a>
       </section>
     </main>
 
-    <dialog id="editDialog" class="edit-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">עריכת שיבוץ</p><h2 id="dialogStudent">—</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <div id="dialogCurrent" class="current-assignment"></div>
-        <label class="option-picker">
-          <span>חלופה אפשרית</span>
-          <select id="alternativeSelect"></select>
-        </label>
-        <p id="dialogNote" class="dialog-note"></p>
-        <div class="dialog-actions">
-          <button id="saveMoveButton" class="primary-button" type="button">עדכון השיבוץ</button>
-          <button id="deleteAssignmentButton" class="danger-button" type="button">ביטול השיבוץ</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="addDialog" class="edit-dialog add-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">שיבוץ ידני</p><h2>יצירת שיבוץ לתלמיד/ה</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <label class="option-picker">
-          <span>תלמיד/ה</span>
-          <select id="addStudentSelect"></select>
-        </label>
-        <div id="addStudentStatus" class="current-assignment"></div>
-        <label class="option-picker">
-          <span>בחירת מורה ומועד</span>
-          <select id="addOptionSelect"></select>
-        </label>
-        <p id="addDialogNote" class="dialog-note"></p>
-        <div class="dialog-actions">
-          <button id="addAssignmentButton" class="primary-button" type="button">יצירת השיבוץ</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="swapDialog" class="edit-dialog swap-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">בחינת חלופות</p><h2>הצעות להחלפת שיבוצים</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <div class="swap-intro">
-          <p>בחרו תלמיד או תלמידה. המערכת תציע החלפות ששומרות על היקף הזכאות ועל הקצאת שעות הצוות.</p>
-          <label class="option-picker swap-picker">
-            <span>תלמיד/ה</span>
-            <select id="swapStudentSelect"></select>
-          </label>
-        </div>
-        <div id="swapSuggestions" class="swap-suggestions" aria-live="polite"></div>
-        <div class="dialog-actions">
-          <button class="secondary-button" value="cancel">סגירה</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="locksDialog" class="edit-dialog locks-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">העדפות שיוך</p><h2>ניהול שיוכים קבועים</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <p class="locks-intro">ביטול שיוך קבוע אינו משנה שיבוץ קיים. הוא מאפשר למערכת להציע מורים נוספים בחלופות עתידיות.</p>
-        <div id="locksList" class="locks-list"></div>
-        <div class="dialog-actions">
-          <button id="saveLocksButton" class="primary-button" type="button">שמירת השיוכים</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="shareDialog" class="edit-dialog share-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">שיבוץ זוגי</p><h2>שיעור משותף לשני תלמידים</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <p class="locks-intro">סמנו תלמידים שהסכימו לשיבוץ זוגי. המערכת תציע רק צמדים מתאימים שעומדים באילוצי הזמינות.</p>
-        <div id="shareWillingList" class="share-willing-list"></div>
-        <div class="share-suggestions-head"><h3>הצעות לשיבוץ זוגי</h3><span>כל הצעה מחייבת אישור</span></div>
-        <div id="shareSuggestions" class="swap-suggestions" aria-live="polite"></div>
-        <div class="dialog-actions">
-          <button id="saveShareWillingButton" class="primary-button" type="button">שמירת העדפות ועדכון הצעות</button>
-          <button class="secondary-button" value="cancel">סגירה</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="constraintsDialog" class="edit-dialog constraints-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">ניהול אילוצים</p><h2>אילוצי זמינות</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <p class="locks-intro">אפשר להגדיר חסימת זמינות נקודתית. שיבוץ קיים יישמר ויסומן לבדיקה עד לעדכונו.</p>
-        <div class="constraint-form">
-          <label><span>סוג</span><select id="constraintType"><option value="student">תלמיד/ה</option><option value="teacher">מורה</option></select></label>
-          <label><span>שם</span><select id="constraintPerson"></select></label>
-          <label><span>יום</span><select id="constraintDay"></select></label>
-          <label><span>שעה</span><select id="constraintPeriod"></select></label>
-          <button id="addConstraintButton" class="primary-button" type="button">שמירת אילוץ</button>
-        </div>
-        <div id="constraintsList" class="constraints-list"></div>
-        <div class="dialog-actions"><button class="secondary-button" value="cancel">סגירה</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="studentRegistryDialog" class="edit-dialog student-registry-dialog">
-      <form method="dialog" class="dialog-shell">
-        <div class="dialog-head">
-          <div><p class="eyebrow dark">מאגר תלמידים</p><h2 id="studentRegistryDialogTitle">קליטת תלמיד/ה</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
-        </div>
-        <div class="student-wizard-progress"><span id="studentWizardProgress">שלב 1 מתוך 6</span><div><i id="studentWizardBar"></i></div></div>
-        <div id="studentWizardMessage" class="form-message" role="alert" aria-live="assertive"></div>
-        <div class="registry-form">
-          <section class="student-wizard-step" data-student-step="0"><h3>מה שם התלמיד/ה?</h3><p>השם ישמש לזיהוי בכל התצוגות והדו״חות.</p><label class="wizard-single-field"><span>שם מלא</span><input id="registryStudentName" autocomplete="off" required /></label></section>
-          <section class="student-wizard-step" data-student-step="1" hidden><h3>באיזו כיתה?</h3><label class="wizard-single-field"><span>כיתה</span><input id="registryStudentGrade" autocomplete="off" placeholder="לדוגמה: יא5" required /></label></section>
-          <section class="student-wizard-step" data-student-step="2" hidden><div class="basket-heading"><div><h3>מה כולל הסל האישי?</h3><p>מקצוע ומספר שעות מבוקש.</p></div><button id="addRequestRowButton" class="secondary-button" type="button">הוספת מקצוע</button></div><div id="requestRows" class="request-rows"></div></section>
-          <section class="student-wizard-step" data-student-step="3" hidden><h3>נעלה את מערכת השעות</h3><p>כך נוכל לזהות חלונות ושעות מתאימות באופן אוטומטי.</p><label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div id="registryScheduleStatus" class="file-status" aria-live="polite">טרם נבחר קובץ.</div></section>
-          <section class="student-wizard-step" data-student-step="4" hidden><h3>האם קיימות החרגות לימודיות?</h3><p>אפשר לשנות אותן גם בהמשך.</p><label class="choice-card"><input id="registryAllowOtherLessons" type="checkbox" /><span><strong>אפשר לשבץ על חשבון שיעורים אחרים</strong><small>המערכת תציע זאת רק לאחר חלונות ושעות המקצוע.</small></span></label><label class="choice-card"><input id="registryNoPeriodZero" type="checkbox" /><span><strong>אין אפשרות להגיע בשעה 0</strong><small>השעה תיחסם לחלוטין עבור התלמיד/ה.</small></span></label></section>
-          <section class="student-wizard-step" data-student-step="5" hidden><h3>העדפות נוספות</h3><label class="choice-card"><input id="registryShareWilling" type="checkbox" /><span><strong>אפשר להציע שיבוץ זוגי</strong><small>כל הצעה תחייב אישור לפני השיבוץ.</small></span></label><label class="wizard-single-field"><span>הערה לצוות (רשות)</span><textarea id="registryExceptionNotes" rows="3" placeholder="למשל: להימנע מיום חמישי בשעה האחרונה"></textarea></label></section>
-        </div>
-        <div class="dialog-actions">
-          <button id="studentWizardBack" class="secondary-button" type="button" hidden>חזרה</button>
-          <button id="studentWizardNext" class="primary-button" type="button">המשך</button>
-          <button id="saveRegistryStudentButton" class="primary-button" type="button" hidden>שמירת התלמיד/ה</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="studentDetailDialog" class="edit-dialog student-detail-dialog">
-      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">כרטיס תלמיד/ה</p><h2 id="studentDetailTitle">—</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div id="studentDetailContent" class="student-detail-content"></div><div class="dialog-actions"><button id="editStudentFromDetail" class="primary-button" type="button">עריכת פרטים</button><button class="secondary-button" value="cancel">סגירה</button></div></form>
-    </dialog>
-
-    <dialog id="settingsDialog" class="edit-dialog settings-dialog">
-      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות הפרויקט</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="9" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 9" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
-    </dialog>
-
-    <dialog id="privacyDialog" class="edit-dialog privacy-dialog">
-      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">שמירה ופרטיות</p><h2>הנתונים נשארים במכשיר</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="privacy-content"><p>שמות התלמידים, מערכות השעות והשיבוצים נשמרים באחסון המקומי של הדפדפן. האתר אינו שולח אותם לשרת.</p><div class="privacy-callout"><strong>כדי לא לאבד מידע</strong><span>מומלץ להוריד גיבוי בסיום כל יום עבודה ולשמור אותו בכונן מאובטח של בית הספר.</span></div><p id="lastBackupText">טרם הורד גיבוי מהמכשיר הזה.</p></div><div class="dialog-actions"><button id="privacyBackupButton" class="primary-button" type="button">הורדת גיבוי עכשיו</button><button class="secondary-button" value="cancel">סגירה</button></div></form>
-    </dialog>
-
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-    <script src="schedule-data.js"></script>
-    <script src="xlsx-reader.js"></script>
-    <script src="app.js"></script>
+    <footer class="landing-footer"><span>מערכת שיבוצים דיפרנציאליים</span><span>לניהול מסודר של הסל האישי</span></footer>
   </body>
 </html>
