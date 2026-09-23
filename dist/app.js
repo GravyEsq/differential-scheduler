@@ -2002,20 +2002,26 @@
       ...studentRegistry.map(item => item.fullName)
     ].filter(Boolean));
     const remapStudentKeys = source => {
+      let changed = false;
       Object.keys(source).forEach(oldName => {
         const cleaned = stripStudentGradeSuffix(oldName);
         if (!cleaned || cleaned === oldName || !names.has(cleaned)) return;
         if (!Object.hasOwn(source, cleaned)) source[cleaned] = source[oldName];
         delete source[oldName];
+        changed = true;
       });
+      return changed;
     };
-    remapStudentKeys(activeLocks);
-    remapStudentKeys(defaultLocks);
-    remapStudentKeys(shareWilling);
+    let remappedState = remapStudentKeys(activeLocks);
+    remappedState = remapStudentKeys(defaultLocks) || remappedState;
+    remappedState = remapStudentKeys(shareWilling) || remappedState;
     activeConstraints.forEach(item => {
       if (item.type !== "student") return;
       const cleaned = stripStudentGradeSuffix(item.name);
-      if (cleaned && names.has(cleaned)) item.name = cleaned;
+      if (cleaned && names.has(cleaned) && cleaned !== item.name) {
+        item.name = cleaned;
+        remappedState = true;
+      }
     });
     const targets = new Map();
     names.forEach(name => {
@@ -2032,7 +2038,7 @@
         if (record.projectStudentName === oldName) record.projectStudentName = newName;
       });
     });
-    if (!safeTargets.length) return 0;
+    if (!safeTargets.length && !remappedState) return 0;
     payload.schedule = draft;
     saveAssignments();
     saveLocks();
@@ -2739,7 +2745,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=7").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=8").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
