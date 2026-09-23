@@ -145,7 +145,7 @@
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
           <div><p class="eyebrow dark">עריכת שיבוץ</p><h2 id="dialogStudent">—</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+          <button class="close-button" value="cancel" formnovalidate aria-label="סגירה">×</button>
         </div>
         <div id="dialogCurrent" class="current-assignment"></div>
         <label class="option-picker">
@@ -156,7 +156,7 @@
         <div class="dialog-actions">
           <button id="saveMoveButton" class="primary-button" type="button">עדכון השיבוץ</button>
           <button id="deleteAssignmentButton" class="danger-button" type="button">ביטול השיבוץ</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
+          <button class="secondary-button" value="cancel" formnovalidate>ביטול</button>
         </div>
       </form>
     </dialog>
@@ -310,7 +310,7 @@
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
           <div><p class="eyebrow dark">מאגר תלמידים</p><h2 id="studentRegistryDialogTitle">קליטת תלמיד/ה</h2></div>
-          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+          <button class="close-button" value="cancel" formnovalidate aria-label="סגירה">×</button>
         </div>
         <div class="student-wizard-progress"><span id="studentWizardProgress">שלב 1 מתוך 6</span><div><i id="studentWizardBar"></i></div></div>
         <div id="studentWizardMessage" class="form-message" role="alert" aria-live="assertive"></div>
@@ -326,7 +326,7 @@
           <button id="studentWizardBack" class="secondary-button" type="button" hidden>חזרה</button>
           <button id="studentWizardNext" class="primary-button" type="button">המשך</button>
           <button id="saveRegistryStudentButton" class="primary-button" type="button" hidden>שמירת התלמיד/ה</button>
-          <button class="secondary-button" value="cancel">ביטול</button>
+          <button class="secondary-button" value="cancel" formnovalidate>ביטול</button>
         </div>
       </form>
     </dialog>
