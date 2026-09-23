@@ -144,6 +144,7 @@
     reviewDialog: document.querySelector("#reviewDialog"),
     reviewList: document.querySelector("#reviewList"),
     schedulingBusy: document.querySelector("#schedulingBusy"),
+    floatingRecalculateButton: document.querySelector("#floatingRecalculateButton"),
     privacyDialog: document.querySelector("#privacyDialog"),
     lastBackupText: document.querySelector("#lastBackupText"),
     toast: document.querySelector("#toast")
@@ -651,6 +652,7 @@
     elements.teachersView.hidden = activeView !== "teachers";
     elements.registryView.hidden = activeView !== "registry";
     elements.attentionPanel.hidden = activeView === "registry";
+    elements.floatingRecalculateButton.hidden = activeView === "registry";
     document.querySelector("#workspaceSection").classList.toggle("registry-active", activeView === "registry");
     if (activeView === "schedule") renderGrid();
     if (activeView === "students") renderStudentsView();
@@ -1225,6 +1227,7 @@
     document.body.classList.toggle("is-scheduling", busy);
     elements.schedulingBusy.hidden = !busy;
     document.querySelector("#recalculateButton").disabled = busy;
+    elements.floatingRecalculateButton.disabled = busy;
     elements.nextActionButton.disabled = busy;
   }
 
@@ -2099,6 +2102,7 @@
   document.querySelector("#summarySection").hidden = isEmptyProject;
   document.querySelector("#viewTabs").hidden = isEmptyProject;
   document.querySelector("#workspaceSection").hidden = isEmptyProject;
+  elements.floatingRecalculateButton.hidden = isEmptyProject;
   const defaultProjectButton = document.querySelector("#defaultProjectButton");
   defaultProjectButton.hidden = !storedProject;
   defaultProjectButton.addEventListener("click", () => {
@@ -2158,6 +2162,7 @@
   elements.alternativeSelect.addEventListener("change", updateDialogOptionNote);
   document.querySelector("#manualButton").addEventListener("click", () => openAddDialog());
   document.querySelector("#recalculateButton").addEventListener("click", recalculateMissingAssignments);
+  elements.floatingRecalculateButton.addEventListener("click", recalculateMissingAssignments);
   elements.addStudentSelect.addEventListener("change", refreshAddDialog);
   elements.addOptionSelect.addEventListener("change", updateAddDialogNote);
   elements.addAssignmentButton.addEventListener("click", addAssignment);

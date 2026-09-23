@@ -60,10 +60,10 @@
       </section>
 
       <nav id="viewTabs" class="view-tabs" aria-label="בחירת תצוגה" role="tablist">
-        <button id="scheduleTab" class="view-tab active" data-view="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView" tabindex="0">מערכת שבועית</button>
-        <button id="studentsTab" class="view-tab" data-view="students" type="button" role="tab" aria-selected="false" aria-controls="studentsView" tabindex="-1">לפי תלמידים</button>
-        <button id="teachersTab" class="view-tab" data-view="teachers" type="button" role="tab" aria-selected="false" aria-controls="teachersView" tabindex="-1">לפי צוות</button>
-        <button id="registryTab" class="view-tab" data-view="registry" type="button" role="tab" aria-selected="false" aria-controls="registryView" tabindex="-1">מאגר תלמידים</button>
+        <button id="scheduleTab" class="view-tab active" data-view="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView" tabindex="0"><span class="tab-glyph" aria-hidden="true">▦</span><span>לוח</span></button>
+        <button id="studentsTab" class="view-tab" data-view="students" type="button" role="tab" aria-selected="false" aria-controls="studentsView" tabindex="-1"><span class="tab-glyph" aria-hidden="true">●</span><span>תלמידים</span></button>
+        <button id="teachersTab" class="view-tab" data-view="teachers" type="button" role="tab" aria-selected="false" aria-controls="teachersView" tabindex="-1"><span class="tab-glyph" aria-hidden="true">◉</span><span>צוות</span></button>
+        <button id="registryTab" class="view-tab" data-view="registry" type="button" role="tab" aria-selected="false" aria-controls="registryView" tabindex="-1"><span class="tab-glyph" aria-hidden="true">▤</span><span>מאגר</span></button>
       </nav>
 
       <section id="workspaceSection" class="workspace">
@@ -149,6 +149,8 @@
         </aside>
       </section>
     </main>
+
+    <button id="floatingRecalculateButton" class="floating-action" type="button" title="בדיקת אילוצים והשלמת שעות חסרות באופן אוטומטי"><span aria-hidden="true">✦</span> סידור מערכת</button>
 
     <dialog id="editDialog" class="edit-dialog">
       <form method="dialog" class="dialog-shell">
