@@ -436,8 +436,6 @@
     const hardErrors = [];
 
     assignments.forEach(item => {
-      const teacherLimit = assignmentLimits.get(item.teacher) || 0;
-      if ((byTeacher.get(item.teacher) || 0) > teacherLimit) hardErrors.push(`${item.teacher} חורג/ת ממכסת השעות המותרת`);
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
@@ -488,6 +486,8 @@
     if (overridden.length) warnings.push({ level: "warning", text: `${overridden.length} שיבוצים מתקיימים במקום שיעור קיים: ${overridden.map(item => `${item.student} (${item.day} ${item.period})`).join(", ")}` });
     draft.teachers.forEach(teacher => {
       const used = byTeacher.get(teacher.teacher) || 0;
+      const assignmentLimit = assignmentLimits.get(teacher.teacher);
+      if (assignmentLimit !== undefined && used > assignmentLimit) warnings.push({ level: "warning", text: `${teacher.teacher} משובצ/ת ל-${used} שעות, מעבר למכסה שנקבעה (${assignmentLimit})` });
       if (teacher.preferred_quota !== undefined && used > teacher.preferred_quota) warnings.push({ level: "warning", text: `${teacher.teacher} משובצ/ת ל-${used} שעות; היעד המועדף הוא ${teacher.preferred_quota}` });
       const source = teacherData.get(teacher.teacher);
       const preferredGrades = source?.preferred_student_grades || (source?.preferred_student_grade ? [source.preferred_student_grade] : []);
@@ -840,9 +840,12 @@
       const slotKey = `${studentSlot.day}-${studentSlot.period}`;
       if (occupiedByStudent.has(slotKey)) return;
       if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
+      const registryRecord = studentRegistry.find(record => record.fullName === studentName);
+      if (registryRecord?.exceptions?.noPeriodZero && studentSlot.period === 0) return;
+      if (studentSlot.period > (projectMeta.lastPeriod ?? 9)) return;
       teacherData.forEach((teacher, teacherName) => {
         if (!teacherAllows(teacherName, studentName)) return;
-        if (teacher.forbidden_periods.includes(studentSlot.period)) return;
+        if ((teacher.forbidden_periods || []).includes(studentSlot.period)) return;
         if (isConstrained("teacher", teacherName, studentSlot.day, studentSlot.period)) return;
         const teacherSlot = teacher.candidates.find(item => item.day === studentSlot.day && item.period === studentSlot.period);
         if (!teacherSlot) return;
@@ -852,7 +855,6 @@
         const overQuota = assignmentLimit !== undefined && projectedTeacherLoad > assignmentLimit;
         if (overQuota && !includeOverQuota) return;
         if (!teacherConsecutiveOptionIsLegal(teacherName, studentSlot.day, studentSlot.period, currentId)) return;
-        if (studentSlot.period > 9) return;
         const same = Boolean(currentAssignment) && teacherName === currentAssignment.teacher && studentSlot.day === currentAssignment.day && studentSlot.period === currentAssignment.period;
         const siblingTeachers = new Set(assignments.filter(item => item.id !== currentId && item.student === studentName).map(item => item.teacher));
         const createsSplit = siblingTeachers.size > 0 && !siblingTeachers.has(teacherName);
@@ -1064,47 +1066,125 @@
     };
   }
 
-  function showRecalculationResult(added, remaining, searchStopped) {
+  function assignmentProblems(item) {
+    const problems = [];
+    const teacher = teacherData.get(item.teacher);
+    const registryRecord = studentRegistry.find(record => record.fullName === item.student);
+    if (!candidateForStudent(item.student, item.day, item.period)) problems.push("אינה אפשרית במערכת התלמיד/ה");
+    if (!(teacher?.candidates || []).some(candidate => candidate.day === item.day && candidate.period === item.period)) problems.push("אינה זמינה במערכת המורה");
+    if ((teacher?.forbidden_periods || []).includes(item.period)) problems.push("נחסמה למורה בשעה זו");
+    if (!teacherAllows(item.teacher, item.student)) problems.push("אינה תואמת לאילוץ המורה והתלמיד/ה");
+    if (isConstrained("student", item.student, item.day, item.period) || isConstrained("teacher", item.teacher, item.day, item.period)) problems.push("סותרת אילוץ זמינות פעיל");
+    if (registryRecord?.exceptions?.noPeriodZero && item.period === 0) problems.push("סותרת החרגה של התלמיד/ה לגבי שעה 0");
+    if (item.period > (projectMeta.lastPeriod ?? 9)) problems.push("אחרי השעה האחרונה שהוגדרה לפרויקט");
+    return problems;
+  }
+
+  function assignmentsToRepair() {
+    const repairs = new Map();
+    const addRepair = (item, reason) => {
+      if (!repairs.has(item.id)) repairs.set(item.id, { item, reasons: new Set() });
+      repairs.get(item.id).reasons.add(reason);
+    };
+    const keepFirst = items => items.slice().sort((a, b) => {
+      const lockedDelta = Number(activeLocks[b.student] === b.teacher) - Number(activeLocks[a.student] === a.teacher);
+      return lockedDelta || String(a.id).localeCompare(String(b.id));
+    })[0];
+
+    assignments.forEach(item => assignmentProblems(item).forEach(reason => addRepair(item, reason)));
+
+    const studentSlots = new Map();
+    const teacherSlots = new Map();
+    assignments.forEach(item => {
+      const studentKey = `${item.student}|${item.day}|${item.period}`;
+      const teacherKey = `${item.teacher}|${item.day}|${item.period}`;
+      studentSlots.set(studentKey, [...(studentSlots.get(studentKey) || []), item]);
+      teacherSlots.set(teacherKey, [...(teacherSlots.get(teacherKey) || []), item]);
+    });
+    studentSlots.forEach(items => {
+      if (items.length < 2) return;
+      const kept = keepFirst(items);
+      items.filter(item => item.id !== kept.id).forEach(item => addRepair(item, "מתנגש עם שיבוץ אחר של אותו תלמיד/ה"));
+    });
+    teacherSlots.forEach(items => {
+      const validShared = items.length === 2 && items.every(item => item.groupId && item.groupId === items[0].groupId && shareWilling[item.student]);
+      if (items.length < 2 || validShared) return;
+      const kept = keepFirst(items);
+      items.filter(item => item.id !== kept.id).forEach(item => addRepair(item, "מתנגש עם שיבוץ אחר של אותה מורה"));
+    });
+
+    teacherData.forEach((teacher, teacherName) => {
+      const limit = Math.min(7, teacher.max_consecutive || 7);
+      days.forEach(day => {
+        let planned = assignments.filter(item => item.teacher === teacherName && item.day === day && !repairs.has(item.id));
+        let periods = () => (teacher.base_commitments || []).filter(item => item.day === day).map(item => item.period).concat(planned.map(item => item.period));
+        while (maxConsecutive(periods()) > limit) {
+          const candidate = planned.slice().sort((a, b) => b.period - a.period || String(b.id).localeCompare(String(a.id)))[0];
+          if (!candidate) break;
+          addRepair(candidate, `יוצר/ת רצף של יותר מ-${limit} שעות למורה`);
+          planned = planned.filter(item => item.id !== candidate.id);
+        }
+      });
+    });
+    return [...repairs.values()];
+  }
+
+  function showRecalculationResult({ added, repaired, remaining, searchStopped }) {
+    const repairedText = repaired.length
+      ? `<p><strong>${repaired.length === 1 ? "שיבוץ לא חוקי אחד שוחרר" : `${repaired.length} שיבוצים לא חוקיים שוחררו`} לצורך תיקון.</strong></p><ul>${repaired.map(({ item, reasons }) => `<li><strong>${esc(item.student)}</strong> — ${esc([...reasons].join("; "))}</li>`).join("")}</ul>`
+      : "";
     const addedText = added
-      ? `<p><strong>נוספו ${added === 1 ? "שעה אחת" : `${added} שעות`}.</strong> השיבוצים הידניים והשיוכים הקיימים נשמרו ללא שינוי.</p>`
-      : "<p><strong>לא נוספו שיבוצים חדשים.</strong> השיבוצים הידניים והשיוכים הקיימים נשמרו ללא שינוי.</p>";
+      ? `<p><strong>נוצרו ${added === 1 ? "שיבוץ אחד חדש" : `${added} שיבוצים חדשים`}.</strong></p>`
+      : "";
+    const unchangedText = !added && !repaired.length
+      ? "<p><strong>לא נמצאו חוסרים או שיבוצים שסותרים אילוץ פעיל.</strong></p>"
+      : "";
     const remainingText = remaining.length
       ? `<p><strong>${searchStopped ? "לא נמצאה בחיפוש שבוצע" : "לא נמצאה"} חלופה חוקית עבור השעות הבאות:</strong></p><ul>${remaining.map(student => `<li><strong>${esc(student.student)}</strong> — ${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}</li>`).join("")}</ul>`
-      : "<p><strong>כל שעות הזכאות שנותרו הושלמו.</strong></p>";
+      : "<p><strong>כל שעות הזכאות משובצות כעת.</strong></p>";
     const stoppedText = searchStopped
       ? "<p>נבדקו חלופות רבות, והחיפוש הופסק כדי לא לעכב את העבודה. אפשר לנסות שוב לאחר שינוי באילוצים או בשיבוצים.</p>"
       : "";
-    elements.recalculateSummary.innerHTML = `${addedText}${remainingText}${stoppedText}`;
+    elements.recalculateSummary.innerHTML = `${repairedText}${addedText}${unchangedText}${remainingText}${stoppedText}`;
     elements.recalculateDialog.showModal();
   }
 
   function recalculateMissingAssignments() {
+    const originalAssignments = assignments;
+    const repaired = assignmentsToRepair();
+    const repairedIds = new Set(repaired.map(({ item }) => item.id));
+    assignments = originalAssignments.filter(item => !repairedIds.has(item.id));
+    const fixedAssignments = assignments;
     const initialMissing = missingStudents();
     const totalMissing = initialMissing.reduce((sum, item) => sum + item.missingNow, 0);
     if (!totalMissing) {
-      showRecalculationResult(0, [], false);
+      assignments = originalAssignments;
+      if (repaired.length) {
+        captureUndo("תיקון והשלמת שיבוצים");
+        assignments = fixedAssignments;
+        saveAssignments();
+        renderAll();
+        showToast("השיבוצים שסתרו אילוץ פעיל שוחררו.");
+      }
+      showRecalculationResult({ added: 0, repaired, remaining: missingStudents(), searchStopped: false });
       return;
     }
 
-    const fixedAssignments = assignments;
-    const requirements = initialMissing.flatMap(student => Array.from({ length: student.missingNow }, (_, index) => ({
-      student: student.student,
-      id: `${student.student}-${index}`
-    })));
+    const requirements = initialMissing.flatMap(student => Array.from({ length: student.missingNow }, () => student.student));
     const workingAdditions = [];
     let bestAdditions = [];
     let visitedNodes = 0;
     let searchStopped = false;
-    const maxNodes = 12000;
+    const maxNodes = 30000;
     const runId = Date.now();
 
     function chooseRequirement(pending) {
       let chosen = null;
-      pending.forEach((requirement, index) => {
+      pending.forEach((studentName, index) => {
         if (chosen?.options.length === 0) return;
-        const options = legalOptionsForStudent(requirement.student);
-        if (!chosen || options.length < chosen.options.length || (options.length === chosen.options.length && requirement.student.localeCompare(chosen.requirement.student, "he") < 0)) {
-          chosen = { requirement, index, options };
+        const options = legalOptionsForStudent(studentName);
+        if (!chosen || options.length < chosen.options.length || (options.length === chosen.options.length && studentName.localeCompare(chosen.studentName, "he") < 0)) {
+          chosen = { studentName, index, options };
         }
       });
       return chosen;
@@ -1124,31 +1204,29 @@
       if (!choice) return false;
       const nextPending = pending.filter((_, index) => index !== choice.index);
       for (const option of choice.options) {
-        if (visitedNodes >= maxNodes) {
-          searchStopped = true;
-          return false;
-        }
-        const added = autoAssignmentFromOption(choice.requirement.student, option, `auto-${runId}-${visitedNodes}-${workingAdditions.length}`);
+        const added = autoAssignmentFromOption(choice.studentName, option, `auto-${runId}-${visitedNodes}-${workingAdditions.length}`);
         assignments.push(added);
         workingAdditions.push(added);
         const completed = search(nextPending);
         workingAdditions.pop();
         assignments.pop();
         if (completed) return true;
+        if (searchStopped) return false;
       }
       return search(nextPending);
     }
 
     search(requirements);
-    assignments = fixedAssignments;
-    if (bestAdditions.length) {
-      captureUndo("השלמה אוטומטית של שעות חסרות");
-      assignments = fixedAssignments.concat(bestAdditions);
+    const finalAssignments = fixedAssignments.concat(bestAdditions);
+    assignments = originalAssignments;
+    if (repaired.length || bestAdditions.length) {
+      captureUndo("תיקון והשלמת שיבוצים");
+      assignments = finalAssignments;
       saveAssignments();
       renderAll();
-      showToast(`הושלמו ${bestAdditions.length} שעות חסרות.`);
+      showToast(repaired.length ? "השיבוצים נבדקו ותוקנו לפי האילוצים הפעילים." : `הושלמו ${bestAdditions.length} שעות חסרות.`);
     }
-    showRecalculationResult(bestAdditions.length, missingStudents(), searchStopped);
+    showRecalculationResult({ added: bestAdditions.length, repaired, remaining: missingStudents(), searchStopped });
   }
 
   function deleteAssignment() {
@@ -1309,15 +1387,24 @@
       return;
     }
     const missing = missingStudents();
-    const warningCount = scheduleWarnings().filter(item => item.level !== "ok").length;
+    const warningItems = scheduleWarnings();
+    const warningCount = warningItems.filter(item => item.level !== "ok").length;
+    const hardErrorCount = warningItems.filter(item => item.level === "error").length;
     elements.nextActionPanel.hidden = false;
     elements.reviewWarningsButton.hidden = warningCount === 0;
     elements.reviewWarningsButton.textContent = warningCount ? `הצגת ${warningCount} נושאים לבדיקה` : "הצגת נושאים לבדיקה";
+    if (hardErrorCount) {
+      elements.nextActionTitle.textContent = `נמצאו ${hardErrorCount} שיבוצים שדורשים תיקון`;
+      elements.nextActionDescription.textContent = "המערכת יכולה לשחרר שיבוצים שסותרים אילוץ פעיל ולחפש להם חלופה חוקית, בלי לשנות שיבוצים תקינים.";
+      elements.nextActionButton.textContent = "תיקון והשלמת שיבוצים";
+      elements.nextActionButton.dataset.action = "recalculate";
+      return;
+    }
     if (missing.length) {
       const missingHours = missing.reduce((sum, item) => sum + item.missingNow, 0);
       elements.nextActionTitle.textContent = `נותרו ${missingHours} שעות זכאות לשיבוץ`;
-      elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. אפשר לבקש מהמערכת לנסות להשלים אותן בלי לשנות שיבוצים קיימים.`;
-      elements.nextActionButton.textContent = "השלמת שעות חסרות";
+      elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. המערכת תתקן גם שיבוצים שסותרים אילוץ פעיל, ואז תנסה להשלים את כל החוסרים.`;
+      elements.nextActionButton.textContent = "תיקון והשלמת שיבוצים";
       elements.nextActionButton.dataset.action = "recalculate";
       return;
     }
