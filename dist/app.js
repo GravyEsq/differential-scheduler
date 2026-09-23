@@ -56,6 +56,10 @@
   let studentWizardStep = 0;
   let detailStudentId = null;
   let pendingRegistrySchedule = null;
+  let shadowSchedule = null;
+  let shadowMode = "blocked";
+  let shadowDrawing = false;
+  let shadowPaintedSlots = new Set();
   let activeAssignmentId = null;
   let activeView = "schedule";
   let toastTimer = null;
@@ -123,6 +127,10 @@
     requestRows: document.querySelector("#requestRows"),
     registryScheduleFile: document.querySelector("#registryScheduleFile"),
     registryScheduleStatus: document.querySelector("#registryScheduleStatus"),
+    openShadowScheduleButton: document.querySelector("#openShadowScheduleButton"),
+    shadowScheduleEditor: document.querySelector("#shadowScheduleEditor"),
+    shadowScheduleGrid: document.querySelector("#shadowScheduleGrid"),
+    shadowScheduleSummary: document.querySelector("#shadowScheduleSummary"),
     registryShareWilling: document.querySelector("#registryShareWilling"),
     saveRegistryStudentButton: document.querySelector("#saveRegistryStudentButton"),
     addRequestRowButton: document.querySelector("#addRequestRowButton"),
@@ -1522,6 +1530,10 @@
     const record = studentRegistry.find(item => item.id === recordId);
     activeRegistryStudentId = record?.id || null;
     pendingRegistrySchedule = record?.schedule ? structuredClone(record.schedule) : null;
+    shadowSchedule = null;
+    shadowMode = "blocked";
+    shadowDrawing = false;
+    elements.shadowScheduleEditor.hidden = true;
     elements.studentRegistryDialogTitle.textContent = record ? "עריכת פרטי תלמיד/ה" : "קליטת תלמיד/ה";
     elements.registryStudentName.value = record?.fullName || "";
     elements.registryStudentGrade.value = record?.grade || "";
@@ -1535,7 +1547,7 @@
     elements.registryScheduleFile.value = "";
     elements.registryScheduleStatus.textContent = pendingRegistrySchedule
       ? `המערכת שנקלטה: ${pendingRegistrySchedule.fileName || "קובץ Excel"}`
-      : "טרם נבחר קובץ.";
+      : "טרם נבחר קובץ או מערכת צל.";
     elements.registryScheduleStatus.className = `file-status${pendingRegistrySchedule ? " ok" : ""}`;
     showStudentWizardStep(0);
     elements.studentRegistryDialog.showModal();
@@ -1573,7 +1585,7 @@
       try { readRegistryRequests(); } catch (error) { elements.studentWizardMessage.textContent = error.message; return false; }
     }
     if (studentWizardStep === 3 && !pendingRegistrySchedule && !activeRegistryStudentId) {
-      elements.studentWizardMessage.textContent = "יש להעלות מערכת שעות כדי להמשיך. כך המערכת תוכל להציע שעות מתאימות.";
+      elements.studentWizardMessage.textContent = "יש להעלות מערכת שעות או לבנות מערכת צל כדי להמשיך.";
       return false;
     }
     return true;
@@ -1603,11 +1615,109 @@
     return { start, end: nextStart };
   }
 
+  function shadowSubjectTerms() {
+    return [projectMeta.subject, ...(projectMeta.aliases || [])]
+      .map(item => String(item || "").trim().toLocaleLowerCase("he")).filter(Boolean);
+  }
+
+  function shadowSlotKey(day, period) {
+    return `${day}|${period}`;
+  }
+
+  function shadowStateFromTimetable(schedule) {
+    const next = {};
+    days.forEach(day => {
+      for (let period = 0; period <= 9; period += 1) next[shadowSlotKey(day, period)] = "free";
+    });
+    const subjectTerms = shadowSubjectTerms();
+    (schedule?.timetable || []).forEach(row => {
+      if (!Number.isInteger(row.period) || row.period < 0 || row.period > 9) return;
+      days.forEach(day => {
+        const lesson = String(row.lessons?.[day] || "").trim();
+        if (!lesson) return;
+        next[shadowSlotKey(day, row.period)] = subjectTerms.some(term => lesson.toLocaleLowerCase("he").includes(term)) ? "subject" : "blocked";
+      });
+    });
+    return next;
+  }
+
+  function shadowTimetable() {
+    return Array.from({ length: 10 }, (_, period) => ({
+      period,
+      time: `${times[period] || ""}`,
+      lessons: Object.fromEntries(days.map(day => {
+        const state = shadowSchedule?.[shadowSlotKey(day, period)] || "free";
+        const lesson = state === "subject" ? (projectMeta.subject || "שיעור המקצוע") : state === "blocked" ? "שיעור אחר" : "";
+        return [day, lesson];
+      }))
+    }));
+  }
+
+  function updateShadowSchedulePending() {
+    pendingRegistrySchedule = { source: "shadow", fileName: "מערכת צל ידנית", timetable: shadowTimetable() };
+    const states = Object.values(shadowSchedule || {});
+    const blocked = states.filter(state => state === "blocked").length;
+    const subject = states.filter(state => state === "subject").length;
+    elements.shadowScheduleSummary.textContent = `${blocked} חסומות · ${subject} שעות מקצוע`;
+    elements.registryScheduleStatus.textContent = `מערכת הצל נשמרת אוטומטית · ${blocked} שעות חסומות, ${subject} שעות מקצוע.`;
+    elements.registryScheduleStatus.className = "file-status ok";
+  }
+
+  function renderShadowSchedule() {
+    if (!shadowSchedule) return;
+    const cells = [`<div class="shadow-grid-head">שעה</div>`, ...days.map(day => `<div class="shadow-grid-head">${esc(day)}</div>`)];
+    for (let period = 0; period <= 9; period += 1) {
+      cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(times[period])}</small></div>`);
+      days.forEach(day => {
+        const state = shadowSchedule[shadowSlotKey(day, period)] || "free";
+        const label = state === "blocked" ? "חסום" : state === "subject" ? "שיעור מקצוע" : "חלון פנוי";
+        cells.push(`<button class="shadow-cell ${state}" data-shadow-day="${esc(day)}" data-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${state === "subject" ? "מקצוע" : state === "blocked" ? "חסום" : ""}</span></button>`);
+      });
+    }
+    elements.shadowScheduleGrid.innerHTML = cells.join("");
+    elements.shadowScheduleEditor.querySelectorAll("[data-shadow-mode]").forEach(button => button.classList.toggle("active", button.dataset.shadowMode === shadowMode));
+    updateShadowSchedulePending();
+  }
+
+  function openShadowScheduleEditor() {
+    shadowSchedule = shadowStateFromTimetable(pendingRegistrySchedule);
+    shadowMode = "blocked";
+    elements.shadowScheduleEditor.hidden = false;
+    renderShadowSchedule();
+  }
+
+  function paintShadowSlot(button) {
+    if (!button || !shadowSchedule) return;
+    const day = button.dataset.shadowDay;
+    const period = Number(button.dataset.shadowPeriod);
+    if (!days.includes(day) || !Number.isInteger(period)) return;
+    const key = shadowSlotKey(day, period);
+    if (shadowPaintedSlots.has(key)) return;
+    shadowPaintedSlots.add(key);
+    const nextState = shadowMode === "erase" ? "free" : shadowMode;
+    if (shadowSchedule[key] === nextState) return;
+    shadowSchedule[key] = nextState;
+    renderShadowSchedule();
+  }
+
   function availabilityFromRegistry(record, request) {
     const timetable = record.schedule?.timetable || [];
     const subjectTerms = [request.subject, projectMeta.subject, ...(projectMeta.aliases || [])]
       .map(item => String(item || "").trim().toLocaleLowerCase("he")).filter(Boolean);
     const candidates = [];
+    if (record.schedule?.source === "shadow") {
+      days.forEach(day => {
+        timetable.filter(row => row.period >= 0 && row.period <= 9).forEach(row => {
+          const lesson = String(row.lessons?.[day] || "").trim();
+          const lessonNormalized = lesson.toLocaleLowerCase("he");
+          const category = !lesson ? "חלון" : subjectTerms.some(term => lessonNormalized.includes(term)) ? "שיעור במקצוע" : null;
+          if (!category || (record.exceptions?.noPeriodZero && row.period === 0)) return;
+          const range = timeRangeForPeriod(row.period, timetable);
+          candidates.push({ day, period: row.period, ...range, category, replaces_student_lesson: category === "שיעור במקצוע" ? lesson : null });
+        });
+      });
+      return { student: record.fullName, grade: record.grade, shareWilling: record.shareWilling, candidates };
+    }
     days.forEach(day => {
       const rows = timetable.filter(row => row.period >= 0 && row.period <= 9).sort((a, b) => a.period - b.period);
       const occupied = rows.filter(row => String(row.lessons?.[day] || "").trim()).map(row => row.period);
@@ -1678,6 +1788,8 @@
     try {
       const parsed = await window.XlsxScheduleReader.parseStudentSchedule(file);
       pendingRegistrySchedule = { fileName: parsed.fileName, timetable: parsed.timetable };
+      shadowSchedule = null;
+      elements.shadowScheduleEditor.hidden = true;
       if (!elements.registryStudentName.value.trim() && parsed.name) elements.registryStudentName.value = parsed.name;
       if (!elements.registryStudentGrade.value.trim() && parsed.grade) elements.registryStudentGrade.value = parsed.grade;
       elements.registryScheduleStatus.textContent = `הקובץ נקלט בהצלחה · ${parsed.timetable.length} שורות של שעות לימוד`;
@@ -1698,7 +1810,7 @@
       const duplicate = studentRegistry.find(item => item.fullName === fullName && item.id !== activeRegistryStudentId);
       if (duplicate) throw new Error("תלמיד/ה בשם זה כבר קיימ/ת במאגר.");
       const existing = studentRegistry.find(item => item.id === activeRegistryStudentId);
-      if (!pendingRegistrySchedule && !existing) throw new Error("בקליטת תלמיד/ה חדש/ה יש להעלות מערכת שעות אישית.");
+      if (!pendingRegistrySchedule && !existing) throw new Error("בקליטת תלמיד/ה חדש/ה יש להעלות מערכת שעות אישית או לבנות מערכת צל.");
       const requests = readRegistryRequests();
       captureUndo(existing ? "עריכת פרטי תלמיד/ה" : "קליטת תלמיד/ה");
       const record = {
@@ -2227,6 +2339,28 @@
     const [file] = elements.registryScheduleFile.files;
     await readRegistrySchedule(file);
   });
+  elements.openShadowScheduleButton.addEventListener("click", openShadowScheduleEditor);
+  elements.shadowScheduleEditor.addEventListener("click", event => {
+    const tool = event.target.closest("[data-shadow-mode]");
+    if (!tool) return;
+    shadowMode = tool.dataset.shadowMode;
+    elements.shadowScheduleEditor.querySelectorAll("[data-shadow-mode]").forEach(button => button.classList.toggle("active", button === tool));
+  });
+  elements.shadowScheduleGrid.addEventListener("pointerdown", event => {
+    const cell = event.target.closest("[data-shadow-day]");
+    if (!cell) return;
+    event.preventDefault();
+    shadowDrawing = true;
+    shadowPaintedSlots = new Set();
+    paintShadowSlot(cell);
+  });
+  elements.shadowScheduleGrid.addEventListener("pointermove", event => {
+    if (!shadowDrawing) return;
+    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-shadow-day]");
+    paintShadowSlot(cell);
+  });
+  document.addEventListener("pointerup", () => { shadowDrawing = false; shadowPaintedSlots = new Set(); });
+  document.addEventListener("pointercancel", () => { shadowDrawing = false; shadowPaintedSlots = new Set(); });
   elements.studentWizardNext.addEventListener("click", () => { if (studentWizardCanContinue()) showStudentWizardStep(studentWizardStep + 1); });
   elements.studentWizardBack.addEventListener("click", () => showStudentWizardStep(studentWizardStep - 1));
   elements.saveRegistryStudentButton.addEventListener("click", saveRegistryStudent);

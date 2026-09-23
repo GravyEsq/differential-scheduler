@@ -327,7 +327,21 @@
           <section class="student-wizard-step" data-student-step="0"><h3>מה שם התלמיד/ה?</h3><p>השם ישמש לזיהוי בכל התצוגות והדו״חות.</p><label class="wizard-single-field"><span>שם מלא</span><input id="registryStudentName" autocomplete="off" required /></label></section>
           <section class="student-wizard-step" data-student-step="1" hidden><h3>באיזו כיתה?</h3><label class="wizard-single-field"><span>כיתה</span><input id="registryStudentGrade" autocomplete="off" placeholder="לדוגמה: יא5" required /></label></section>
           <section class="student-wizard-step" data-student-step="2" hidden><div class="basket-heading"><div><h3>מה כולל הסל האישי?</h3><p>מקצוע ומספר שעות מבוקש.</p></div><button id="addRequestRowButton" class="secondary-button" type="button">הוספת מקצוע</button></div><div id="requestRows" class="request-rows"></div></section>
-          <section class="student-wizard-step" data-student-step="3" hidden><h3>נעלה את מערכת השעות</h3><p>כך נוכל לזהות חלונות ושעות מתאימות באופן אוטומטי.</p><label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label><div id="registryScheduleStatus" class="file-status" aria-live="polite">טרם נבחר קובץ.</div></section>
+          <section class="student-wizard-step" data-student-step="3" hidden>
+            <h3>מערכת שעות</h3>
+            <p>אפשר להעלות קובץ Excel, או לבנות מערכת צל ישירות כאן.</p>
+            <div class="schedule-source-actions">
+              <label class="file-picker registry-file-picker"><span>בחירת קובץ Excel</span><input id="registryScheduleFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+              <button id="openShadowScheduleButton" class="secondary-button" type="button">בניית מערכת צל</button>
+            </div>
+            <div id="registryScheduleStatus" class="file-status" aria-live="polite">טרם נבחר קובץ או מערכת צל.</div>
+            <section id="shadowScheduleEditor" class="shadow-schedule-editor" hidden>
+              <div class="shadow-editor-head"><div><h4>מערכת צל שבועית</h4><p>שעה ריקה היא חלון פנוי. צבעו שעות חסומות או שעות של המקצוע.</p></div><span id="shadowScheduleSummary" class="shadow-summary">—</span></div>
+              <div class="shadow-tools" role="toolbar" aria-label="כלי סימון למערכת הצל"><button class="shadow-tool active" data-shadow-mode="blocked" type="button"><i class="shadow-swatch blocked"></i>חסום</button><button class="shadow-tool" data-shadow-mode="subject" type="button"><i class="shadow-swatch subject"></i>שיעור מקצוע</button><button class="shadow-tool" data-shadow-mode="erase" type="button"><i class="shadow-swatch erase"></i>מחיקה</button></div>
+              <p class="shadow-drag-hint">אפשר ללחוץ ולגרור על כמה שעות ברצף.</p>
+              <div id="shadowScheduleGrid" class="shadow-schedule-grid" role="grid" aria-label="מערכת צל. בחרו כלי ואז לחצו או גררו על שעות."></div>
+            </section>
+          </section>
           <section class="student-wizard-step" data-student-step="4" hidden><h3>האם קיימות החרגות לימודיות?</h3><p>אפשר לשנות אותן גם בהמשך.</p><label class="choice-card"><input id="registryAllowOtherLessons" type="checkbox" /><span><strong>אפשר לשבץ על חשבון שיעורים אחרים</strong><small>המערכת תציע זאת רק לאחר חלונות ושעות המקצוע.</small></span></label><label class="choice-card"><input id="registryNoPeriodZero" type="checkbox" /><span><strong>אין אפשרות להגיע בשעה 0</strong><small>השעה תיחסם לחלוטין עבור התלמיד/ה.</small></span></label></section>
           <section class="student-wizard-step" data-student-step="5" hidden><h3>העדפות נוספות</h3><label class="choice-card"><input id="registryShareWilling" type="checkbox" /><span><strong>אפשר להציע שיבוץ זוגי</strong><small>כל הצעה תחייב אישור לפני השיבוץ.</small></span></label><label class="wizard-single-field"><span>הערה לצוות (רשות)</span><textarea id="registryExceptionNotes" rows="3" placeholder="למשל: להימנע מיום חמישי בשעה האחרונה"></textarea></label></section>
         </div>
