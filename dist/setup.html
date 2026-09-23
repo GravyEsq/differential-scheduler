@@ -52,7 +52,7 @@
         <section class="wizard-step" data-step="2" hidden>
           <p class="eyebrow dark">צוות הוראה</p>
           <h2>נוסיף את המורים הזמינים</h2>
-          <p>מוסיפים מורה, מסמנים את השעות שבהן אפשר לשבץ, וממשיכים למורה הבאה.</p>
+          <p>מוסיפים מורה, בונים לה מערכת צל קצרה, וממשיכים למורה הבאה.</p>
           <div class="teacher-entry">
             <div class="teacher-entry-fields">
               <label><span>שם המורה</span><input id="manualTeacherName" autocomplete="off" placeholder="שם מלא" /></label>
@@ -60,11 +60,12 @@
               <label><span>מכסה מרבית</span><input id="manualTeacherMaxQuota" type="number" min="1" max="20" value="2" /></label>
               <label><span>שכבות מתאימות <small>(רשות)</small></span><input id="manualTeacherGrades" autocomplete="off" placeholder="לדוגמה: י, יא" /></label>
             </div>
-            <fieldset class="availability-fieldset">
-              <legend>שעות שבהן אפשר לשבץ</legend>
-              <p>לחצו על המשבצות המתאימות. אפשר לדייק אילוצים גם בהמשך.</p>
-              <div id="manualAvailabilityGrid" class="availability-grid"></div>
-            </fieldset>
+            <section class="shadow-schedule-editor teacher-shadow-editor">
+              <div class="shadow-editor-head"><div><h4>מערכת צל שבועית</h4><p>שעה ריקה היא שעה פנויה. סמנו חסימות, שיעורים קבועים או שעות גמישות.</p></div><span id="manualTeacherShadowSummary" class="shadow-summary">—</span></div>
+              <div class="shadow-tools" role="toolbar" aria-label="כלי סימון למערכת הצל של המורה"><button class="shadow-tool active" data-teacher-shadow-mode="blocked" type="button"><i class="shadow-swatch blocked"></i>חסום</button><button class="shadow-tool" data-teacher-shadow-mode="fixed" type="button"><i class="shadow-swatch fixed"></i>שיעור קבוע</button><button class="shadow-tool" data-teacher-shadow-mode="flexible" type="button"><i class="shadow-swatch subject"></i>שעה גמישה</button><button class="shadow-tool" data-teacher-shadow-mode="erase" type="button"><i class="shadow-swatch erase"></i>מחיקה</button></div>
+              <p class="shadow-drag-hint">אפשר ללחוץ ולגרור על כמה שעות ברצף. מחיקה מחזירה את השעה למצב פנוי.</p>
+              <div id="manualAvailabilityGrid" class="shadow-schedule-grid" role="grid" aria-label="מערכת הצל של המורה. בחרו כלי ואז לחצו או גררו על שעות."></div>
+            </section>
             <button id="addManualTeacherButton" class="primary-button" type="button">הוספת המורה לצוות</button>
             <div id="manualTeacherMessage" class="file-status" role="status" aria-live="polite"></div>
           </div>

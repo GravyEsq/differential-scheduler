@@ -16,6 +16,10 @@
   const activeProjectKey = "differential-active-project-v1";
   const MAX_CSV_BYTES = 5 * 1024 * 1024;
   const state = { students: [], teachers: null, studentErrors: [], teacherErrors: [], step: 0 };
+  let teacherShadowSchedule = null;
+  let teacherShadowMode = "blocked";
+  let teacherShadowDrawing = false;
+  let teacherShadowPaintedSlots = new Set();
 
   const elements = {
     form: document.querySelector("#projectForm"),
@@ -37,7 +41,16 @@
     progressText: document.querySelector("#wizardProgressText"),
     progressBar: document.querySelector("#wizardProgressBar"),
     message: document.querySelector("#wizardMessage"),
-    toast: document.querySelector("#toast")
+    toast: document.querySelector("#toast"),
+    manualTeacherName: document.querySelector("#manualTeacherName"),
+    manualTeacherPreferredQuota: document.querySelector("#manualTeacherPreferredQuota"),
+    manualTeacherMaxQuota: document.querySelector("#manualTeacherMaxQuota"),
+    manualTeacherGrades: document.querySelector("#manualTeacherGrades"),
+    manualTeacherGrid: document.querySelector("#manualAvailabilityGrid"),
+    manualTeacherShadowSummary: document.querySelector("#manualTeacherShadowSummary"),
+    manualTeacherMessage: document.querySelector("#manualTeacherMessage"),
+    manualTeacherList: document.querySelector("#manualTeacherList"),
+    addManualTeacher: document.querySelector("#addManualTeacherButton")
   };
 
   function esc(value) {
@@ -50,6 +63,113 @@
 
   function splitList(value) {
     return clean(value).split(/[;,]/).map(clean).filter(Boolean);
+  }
+
+  function teacherShadowKey(day, period) {
+    return `${day}|${period}`;
+  }
+
+  function resetTeacherShadow() {
+    teacherShadowSchedule = {};
+    DAYS.forEach(day => {
+      for (let period = 0; period <= 9; period += 1) teacherShadowSchedule[teacherShadowKey(day, period)] = "free";
+    });
+    teacherShadowMode = "blocked";
+    renderTeacherShadow();
+  }
+
+  function teacherShadowCounts() {
+    const values = Object.values(teacherShadowSchedule || {});
+    return {
+      blocked: values.filter(value => value === "blocked").length,
+      fixed: values.filter(value => value === "fixed").length,
+      flexible: values.filter(value => value === "flexible").length
+    };
+  }
+
+  function renderTeacherShadow() {
+    if (!teacherShadowSchedule) return;
+    const cells = [`<div class="shadow-grid-head">שעה</div>`, ...DAYS.map(day => `<div class="shadow-grid-head">${esc(day)}</div>` )];
+    for (let period = 0; period <= 9; period += 1) {
+      cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(PERIOD_TIMES[period].start)}</small></div>`);
+      DAYS.forEach(day => {
+        const stateName = teacherShadowSchedule[teacherShadowKey(day, period)] || "free";
+        const label = stateName === "blocked" ? "חסום" : stateName === "fixed" ? "שיעור קבוע" : stateName === "flexible" ? "שעה גמישה" : "פנויה";
+        cells.push(`<button class="shadow-cell teacher-${stateName}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${stateName === "fixed" ? "קבוע" : stateName === "flexible" ? "גמיש" : stateName === "blocked" ? "חסום" : ""}</span></button>`);
+      });
+    }
+    elements.manualTeacherGrid.innerHTML = cells.join("");
+    document.querySelectorAll("[data-teacher-shadow-mode]").forEach(button => button.classList.toggle("active", button.dataset.teacherShadowMode === teacherShadowMode));
+    const { blocked, fixed, flexible } = teacherShadowCounts();
+    elements.manualTeacherShadowSummary.textContent = `${blocked} חסומות · ${fixed} קבועות · ${flexible} גמישות`;
+  }
+
+  function paintTeacherShadowSlot(cell) {
+    if (!cell || !teacherShadowSchedule) return;
+    const day = cell.dataset.teacherShadowDay;
+    const period = Number(cell.dataset.teacherShadowPeriod);
+    if (!DAYS.includes(day) || !Number.isInteger(period)) return;
+    const key = teacherShadowKey(day, period);
+    if (teacherShadowPaintedSlots.has(key)) return;
+    teacherShadowPaintedSlots.add(key);
+    const stateName = teacherShadowMode === "erase" ? "free" : teacherShadowMode;
+    if (teacherShadowSchedule[key] === stateName) return;
+    teacherShadowSchedule[key] = stateName;
+    renderTeacherShadow();
+  }
+
+  function setManualTeacherMessage(message, isError = false) {
+    elements.manualTeacherMessage.textContent = message;
+    elements.manualTeacherMessage.className = `file-status${message ? isError ? " error" : " ok" : ""}`;
+  }
+
+  function renderManualTeacherList() {
+    const teachers = state.teachers || [];
+    elements.manualTeacherList.innerHTML = teachers.length
+      ? teachers.map((teacher, index) => `<div class="manual-teacher-card"><div><strong>${esc(teacher.name)}</strong><span>${teacher.candidates.length} שעות זמינות${teacher.base_commitments?.length ? ` · ${teacher.base_commitments.length} שיעורים קבועים` : ""} · מכסה ${teacher.preferred_quota}/${teacher.quota}</span></div><button class="text-button" data-remove-manual-teacher="${index}" type="button">הסרה</button></div>`).join("")
+      : "";
+  }
+
+  function addManualTeacher() {
+    const name = clean(elements.manualTeacherName.value);
+    const preferredQuota = Number(elements.manualTeacherPreferredQuota.value);
+    const quota = Number(elements.manualTeacherMaxQuota.value);
+    const allowedGrades = splitList(elements.manualTeacherGrades.value);
+    if (!name) return setManualTeacherMessage("יש להזין שם מורה.", true);
+    if (!Number.isInteger(preferredQuota) || preferredQuota < 0 || !Number.isInteger(quota) || quota <= 0 || preferredQuota > quota) return setManualTeacherMessage("יש להזין מכסות תקינות: יעד מועדף שאינו גבוה מהמכסה המרבית.", true);
+    if ((state.teachers || []).some(teacher => teacher.name === name)) return setManualTeacherMessage("מורה בשם זה כבר נמצאת בצוות.", true);
+    const meta = projectMeta();
+    const candidates = [];
+    const baseCommitments = [];
+    DAYS.forEach(day => {
+      for (let period = 0; period <= meta.lastPeriod; period += 1) {
+        const stateName = teacherShadowSchedule?.[teacherShadowKey(day, period)] || "free";
+        if (stateName === "fixed") baseCommitments.push({ day, period });
+        if (stateName !== "free" && stateName !== "flexible") continue;
+        const category = stateName === "flexible" ? "שעה גמישה" : "פנויה";
+        candidates.push({ day, period, ...PERIOD_TIMES[period], category, replaces: category === "שעה גמישה" ? "התחייבות גמישה" : null, avoid_if_possible: meta.avoidPeriods.includes(period) });
+      }
+    });
+    if (!candidates.length) return setManualTeacherMessage("לא סומנה למורה אף שעה פנויה או גמישה.", true);
+    state.teachers = [...(state.teachers || []), { name, quota, preferred_quota: preferredQuota, optional_quota: preferredQuota < quota, allowed_student_grades: allowedGrades.length ? allowedGrades : null, preferred_student_grades: [], avoid_periods: meta.avoidPeriods, forbidden_periods: [], max_consecutive: 7, base_commitments: baseCommitments, candidates }];
+    state.teacherErrors = [];
+    elements.manualTeacherName.value = "";
+    elements.manualTeacherPreferredQuota.value = "1";
+    elements.manualTeacherMaxQuota.value = "2";
+    elements.manualTeacherGrades.value = "";
+    resetTeacherShadow();
+    renderManualTeacherList();
+    setManualTeacherMessage(`${name} נוספה לצוות.`);
+    updateReview();
+  }
+
+  function removeManualTeacher(index) {
+    const teacher = (state.teachers || [])[index];
+    if (!teacher) return;
+    state.teachers = state.teachers.filter((_, itemIndex) => itemIndex !== index);
+    renderManualTeacherList();
+    setManualTeacherMessage(`${teacher.name} הוסרה מהצוות.`);
+    updateReview();
   }
 
   function parsePeriods(value) {
@@ -253,7 +373,7 @@
 
   function optionCost(student, studentSlot, teacher, teacherSlot) {
     const studentCosts = { "חלון": 0, "שיעור במקצוע": 25, "קצה לפני": 70, "קצה אחרי": 70, "דריסת שיעור": 150 };
-    const teacherCosts = { "פנויה": 0, "שעה גמישה": 0, "שעה פיקטיבית": 0, "חלון": 5, "קצה לפני": 12, "קצה אחרי": 12 };
+    const teacherCosts = { "פנויה": 0, "שעה גמישה": 2, "שעה פיקטיבית": 2, "חלון": 5, "קצה לפני": 12, "קצה אחרי": 12 };
     let cost = (studentCosts[studentSlot.category] ?? 100) + (teacherCosts[teacherSlot.category] ?? 20);
     if (studentSlot.period < 1 || studentSlot.period > 6) cost += 20;
     if (studentSlot.avoid_if_possible || teacherSlot.avoid_if_possible) cost += 120;
@@ -408,6 +528,7 @@
     if (file.size > MAX_CSV_BYTES) {
       state.teachers = null;
       state.teacherErrors = ["הקובץ גדול מ־5MB. יש לפצל אותו או להסיר שורות שאינן נחוצות."];
+      renderManualTeacherList();
       elements.teacherStatus.className = "file-status error";
       elements.teacherStatus.textContent = state.teacherErrors[0];
       return updateReview();
@@ -418,6 +539,7 @@
     const parsed = errors.length ? { items: [], errors } : readTeachers(parseCsv(text), meta);
     state.teachers = parsed.items;
     state.teacherErrors = parsed.errors;
+    renderManualTeacherList();
     elements.teacherStatus.className = `file-status ${parsed.errors.length ? "error" : "ok"}`;
     elements.teacherStatus.textContent = parsed.errors.length
       ? `${file.name}: ${parsed.errors[0]}${parsed.errors.length > 1 ? ` · ועוד ${parsed.errors.length - 1} בעיות שמפורטות בשלב הבדיקה` : ""}`
@@ -442,8 +564,8 @@
     const errors = [...state.studentErrors, ...state.teacherErrors, ...crossErrors()];
     const formReady = Boolean(clean(elements.school.value) && clean(elements.subject.value) && state.teachers?.length && !errors.length);
     elements.create.disabled = !formReady;
-    if (!state.teachers) {
-      elements.review.textContent = "יש להשלים את קובץ המורים לפני פתיחת הפרויקט.";
+    if (!state.teachers?.length) {
+      elements.review.textContent = "יש להשלים את צוות ההוראה לפני פתיחת הפרויקט.";
       return;
     }
     const required = state.students.reduce((sum, item) => sum + item.required, 0);
@@ -482,8 +604,8 @@
       return false;
     }
     if (state.step === 2 && (!state.teachers?.length || state.teacherErrors.length)) {
-      elements.message.textContent = state.teacherErrors[0] || "יש לבחור קובץ מורים תקין כדי להמשיך.";
-      elements.teacherStatus.textContent = state.teacherErrors[0] || "יש לבחור קובץ מורים תקין כדי להמשיך.";
+      elements.message.textContent = state.teacherErrors[0] || "יש להוסיף לפחות מורה אחת או לטעון קובץ מורים תקין כדי להמשיך.";
+      elements.teacherStatus.textContent = state.teacherErrors[0] || "יש להוסיף לפחות מורה אחת או לטעון קובץ מורים תקין כדי להמשיך.";
       elements.teacherStatus.className = "file-status error";
       return false;
     }
@@ -541,6 +663,30 @@
 
   elements.studentFile.addEventListener("change", loadStudentFile);
   elements.teacherFile.addEventListener("change", loadTeacherFile);
+  elements.addManualTeacher.addEventListener("click", addManualTeacher);
+  elements.manualTeacherGrid.addEventListener("pointerdown", event => {
+    const cell = event.target.closest("[data-teacher-shadow-day]");
+    if (!cell) return;
+    event.preventDefault();
+    teacherShadowDrawing = true;
+    teacherShadowPaintedSlots = new Set();
+    paintTeacherShadowSlot(cell);
+  });
+  elements.manualTeacherGrid.addEventListener("pointermove", event => {
+    if (!teacherShadowDrawing) return;
+    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-teacher-shadow-day]");
+    paintTeacherShadowSlot(cell);
+  });
+  document.addEventListener("pointerup", () => { teacherShadowDrawing = false; teacherShadowPaintedSlots = new Set(); });
+  document.addEventListener("pointercancel", () => { teacherShadowDrawing = false; teacherShadowPaintedSlots = new Set(); });
+  document.querySelectorAll("[data-teacher-shadow-mode]").forEach(button => button.addEventListener("click", () => {
+    teacherShadowMode = button.dataset.teacherShadowMode;
+    renderTeacherShadow();
+  }));
+  elements.manualTeacherList.addEventListener("click", event => {
+    const button = event.target.closest("[data-remove-manual-teacher]");
+    if (button) removeManualTeacher(Number(button.dataset.removeManualTeacher));
+  });
   elements.form.addEventListener("input", updateReview);
   [elements.subject, elements.aliases, elements.lastPeriod, elements.avoidPeriods].forEach(input => input.addEventListener("change", async () => {
     if (elements.studentFile.files.length) await loadStudentFile();
@@ -551,6 +697,7 @@
   elements.back.addEventListener("click", () => showStep(state.step - 1));
   document.querySelector("#studentTemplateButton").addEventListener("click", studentTemplate);
   document.querySelector("#teacherTemplateButton").addEventListener("click", teacherTemplate);
+  resetTeacherShadow();
   showStep(0);
   if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
