@@ -736,6 +736,13 @@
     return preferredGrades.includes(grade) || preferredGrades.includes(group) ? 0 : 3;
   }
 
+  function teacherContinuityPenalty(teacherName, studentName, currentId = null) {
+    const siblingTeachers = new Set(assignments
+      .filter(item => item.id !== currentId && item.student === studentName)
+      .map(item => item.teacher));
+    return siblingTeachers.size && !siblingTeachers.has(teacherName) ? 8 : 0;
+  }
+
   function isConstrained(type, name, day, period) {
     return activeConstraints.some(item => item.type === type && item.name === name && item.day === day && item.period === period);
   }
@@ -1005,8 +1012,8 @@
         if ((overQuota || (overPreferred && !allowOverPreferred)) && !includeOverQuota) return;
         if (!teacherConsecutiveOptionIsLegal(teacherName, studentSlot.day, studentSlot.period, currentId)) return;
         const same = Boolean(currentAssignment) && teacherName === currentAssignment.teacher && studentSlot.day === currentAssignment.day && studentSlot.period === currentAssignment.period;
-        const siblingTeachers = new Set(assignments.filter(item => item.id !== currentId && item.student === studentName).map(item => item.teacher));
-        const createsSplit = siblingTeachers.size > 0 && !siblingTeachers.has(teacherName);
+        const continuityPenalty = teacherContinuityPenalty(teacherName, studentName, currentId);
+        const createsSplit = continuityPenalty > 0;
         options.push({
           teacher: teacherName,
           day: studentSlot.day,
@@ -1019,7 +1026,7 @@
           replaces_student_lesson: studentSlot.replaces_student_lesson || null,
           avoid_if_possible: Boolean(studentSlot.avoid_if_possible),
           continued_day: Boolean(studentSlot.continued_day),
-          quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot) + teacherPreferencePenalty(teacherName, studentName),
+          quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot) + teacherPreferencePenalty(teacherName, studentName) + continuityPenalty,
           same,
           createsSplit,
           overQuota,
@@ -2773,7 +2780,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=9").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=10").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
