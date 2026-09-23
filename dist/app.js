@@ -1966,16 +1966,62 @@
   function renameProjectStudent(oldName, newName) {
     if (!oldName || oldName === newName) return;
     assignments = assignments.map(item => item.student === oldName ? { ...item, student: newName } : item);
+    originalAssignments.forEach(item => { if (item.student === oldName) item.student = newName; });
     const student = draft.students.find(item => item.student === oldName);
     if (student) student.student = newName;
     const availability = payload.studentAvailability.students.find(item => item.student === oldName);
     if (availability) availability.student = newName;
     studentData.delete(oldName);
+    if (availability) studentData.set(newName, availability);
     if (activeLocks[oldName]) {
       activeLocks[newName] = activeLocks[oldName];
       delete activeLocks[oldName];
     }
-    if (Object.hasOwn(shareWilling, oldName)) delete shareWilling[oldName];
+    if (defaultLocks[oldName]) {
+      defaultLocks[newName] = defaultLocks[oldName];
+      delete defaultLocks[oldName];
+    }
+    if (Object.hasOwn(shareWilling, oldName)) {
+      shareWilling[newName] = shareWilling[oldName];
+      delete shareWilling[oldName];
+    }
+    activeConstraints.forEach(item => { if (item.type === "student" && item.name === oldName) item.name = newName; });
+  }
+
+  function stripStudentGradeSuffix(name) {
+    return String(name || "").trim().replace(/\s+י\s*["'׳״]?\s*[אב]?\s*\d{1,2}$/u, "").trim();
+  }
+
+  function normalizeStudentNames() {
+    const names = new Set([
+      ...draft.students.map(item => item.student),
+      ...payload.studentAvailability.students.map(item => item.student),
+      ...studentRegistry.map(item => item.fullName)
+    ].filter(Boolean));
+    const targets = new Map();
+    names.forEach(name => {
+      const cleaned = stripStudentGradeSuffix(name);
+      if (cleaned && cleaned !== name) targets.set(name, cleaned);
+    });
+    const targetCounts = new Map();
+    targets.forEach(target => targetCounts.set(target, (targetCounts.get(target) || 0) + 1));
+    const safeTargets = [...targets].filter(([, target]) => targetCounts.get(target) === 1 && !names.has(target));
+    safeTargets.forEach(([oldName, newName]) => {
+      renameProjectStudent(oldName, newName);
+      studentRegistry.forEach(record => {
+        if (record.fullName === oldName) record.fullName = newName;
+        if (record.projectStudentName === oldName) record.projectStudentName = newName;
+      });
+    });
+    if (!safeTargets.length) return 0;
+    payload.schedule = draft;
+    saveAssignments();
+    saveLocks();
+    saveConstraints();
+    saveShareWilling();
+    saveStudentRegistry();
+    safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    return safeTargets.length;
   }
 
   function syncRecordWithCurrentProject(record, oldName = null, persist = true) {
@@ -2662,6 +2708,7 @@
   document.querySelector("#privacyButton").addEventListener("click", () => { updateBackupMessage(); elements.privacyDialog.showModal(); });
   document.querySelector("#privacyBackupButton").addEventListener("click", exportDraft);
 
+  const normalizedStudentCount = normalizeStudentNames();
   let registryHydratedProject = false;
   studentRegistry.forEach(record => { registryHydratedProject = syncRecordWithCurrentProject(record, record.projectStudentName, false) || registryHydratedProject; });
   if (registryHydratedProject) {
@@ -2671,8 +2718,9 @@
   }
   updateBackupMessage();
   renderAll();
+  if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=4").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=5").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
