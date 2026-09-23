@@ -90,6 +90,7 @@
     addAssignmentButton: document.querySelector("#addAssignmentButton"),
     swapDialog: document.querySelector("#swapDialog"),
     swapStudentSelect: document.querySelector("#swapStudentSelect"),
+    swapShowEdges: document.querySelector("#swapShowEdges"),
     swapSuggestions: document.querySelector("#swapSuggestions"),
     locksDialog: document.querySelector("#locksDialog"),
     locksList: document.querySelector("#locksList"),
@@ -438,6 +439,7 @@
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
+      if (!teacherAllows(item.teacher, item.student)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ השכבה של ${item.teacher}`);
       if (isConstrained("student", item.student, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ זמינות שהוגדר`);
       if (isConstrained("teacher", item.teacher, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.teacher} אינו תואם לאילוץ זמינות שהוגדר`);
       const registryRecord = studentRegistry.find(record => record.fullName === item.student);
@@ -605,10 +607,14 @@
   function teacherAllows(teacherName, studentName) {
     if (activeLocks[studentName]) return teacherName === activeLocks[studentName];
     const teacher = teacherData.get(teacherName);
-    if (!teacher.allowed_student_grades) return true;
+    if (!teacher) return false;
     const grade = draft.students.find(student => student.student === studentName)?.grade;
     const group = grade?.startsWith("יא") ? "יא" : grade?.startsWith("יב") ? "יב" : grade?.startsWith("י") ? "י" : grade;
-    return teacher.allowed_student_grades.includes(grade) || teacher.allowed_student_grades.includes(group);
+    const matchesGrade = grades => grades.includes(grade) || grades.includes(group);
+    const forbiddenGrades = teacher.forbidden_student_grades || teacher.excluded_student_grades || [];
+    if (forbiddenGrades.length && matchesGrade(forbiddenGrades)) return false;
+    if (!teacher.allowed_student_grades) return true;
+    return matchesGrade(teacher.allowed_student_grades);
   }
 
   function isConstrained(type, name, day, period) {
@@ -630,6 +636,25 @@
     return (rank[candidate?.category] ?? 6) + (candidate?.avoid_if_possible ? 8 : 0);
   }
 
+  function isExcludedFromSwapSuggestions(teacherName) {
+    return Boolean(teacherData.get(teacherName)?.exclude_from_swap_suggestions);
+  }
+
+  function hasSwapEdgePeriod(suggestion) {
+    return [...suggestion.firstDestinations, ...suggestion.secondDestinations].some(item => item.period === 0 || item.period === 8);
+  }
+
+  function quotaWarningsForSwap(teacherNames) {
+    const counts = assignmentCounts().byTeacher;
+    return [...new Set(teacherNames)].flatMap(teacherName => {
+      const teacher = draft.teachers.find(item => item.teacher === teacherName);
+      const assigned = counts.get(teacherName) || 0;
+      return teacher && assigned > teacher.quota
+        ? [`${teacherName} כבר חורג/ת מהמכסה (${assigned}/${teacher.quota})`]
+        : [];
+    });
+  }
+
   function buildSwapSuggestion(firstStudent, secondStudent) {
     const firstLessons = lessonsForStudent(firstStudent);
     const secondLessons = lessonsForStudent(secondStudent);
@@ -640,6 +665,7 @@
     const [firstTeacher] = firstTeachers;
     const [secondTeacher] = secondTeachers;
     if (firstTeacher === secondTeacher) return null;
+    if (isExcludedFromSwapSuggestions(firstTeacher) || isExcludedFromSwapSuggestions(secondTeacher)) return null;
     if (!teacherAllows(secondTeacher, firstStudent) || !teacherAllows(firstTeacher, secondStudent)) return null;
 
     const firstDestinations = secondLessons.map(item => candidateForStudent(firstStudent, item.day, item.period));
@@ -656,6 +682,7 @@
     if (lateCount) warningParts.push(`${lateCount} שעות בשעה 9`);
     if (edgeCount) warningParts.push(`${edgeCount} שעות מחוץ למערכת הרגילה`);
     if (overrideCount) warningParts.push(`${overrideCount} שיבוצים במקום שיעור קיים`);
+    warningParts.push(...quotaWarningsForSwap([firstTeacher, secondTeacher]));
 
     return {
       firstStudent,
@@ -685,7 +712,8 @@
 
   function renderSwapSuggestions() {
     const studentName = elements.swapStudentSelect.value;
-    const suggestions = findSwapSuggestions(studentName);
+    const suggestions = findSwapSuggestions(studentName)
+      .filter(item => elements.swapShowEdges.checked || !hasSwapEdgePeriod(item));
     elements.swapSuggestions._items = suggestions;
     if (!suggestions.length) {
       elements.swapSuggestions.innerHTML = `<div class="swap-empty"><strong>לא נמצאה החלפה מלאה שמתאימה לכללים שהוגדרו.</strong><br>ייתכן שקיים שיוך קבוע. אפשר לבחור תלמיד או תלמידה אחרים, או לעדכן שיבוץ יחיד דרך הלוח.</div>`;
@@ -706,6 +734,7 @@
     elements.swapStudentSelect.innerHTML = names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
     const firstWithSuggestion = names.find(name => findSwapSuggestions(name).length);
     if (firstWithSuggestion) elements.swapStudentSelect.value = firstWithSuggestion;
+    elements.swapShowEdges.checked = false;
     renderSwapSuggestions();
     elements.swapDialog.showModal();
   }
@@ -1564,7 +1593,7 @@
     const knownStudents = new Set(draft.students.map(student => student.student));
     const knownTeachers = new Set(draft.teachers.map(teacher => teacher.teacher));
     data.assignments.forEach((item, index) => {
-      if (!item || !knownStudents.has(item.student)) throw new Error(`בשיבוץ מספר ${index + 1} מופיע תלמיד שאינו קיים במערכת.`);
+      if (!item || !knownStudents.has(item.student)) throw new Error(`בשיבוץ מספר ${index + 1} מופיע תלמיד שאינו קיים במערכת: ${JSON.stringify(item?.student)}`);
       if (!knownTeachers.has(item.teacher)) throw new Error(`בשיבוץ מספר ${index + 1} מופיעה מורה שאינה קיימת במערכת.`);
       if (!days.includes(item.day) || !Number.isInteger(item.period) || item.period < 0 || item.period > 9) {
         throw new Error(`בשיבוץ מספר ${index + 1} היום או השעה אינם תקינים.`);
@@ -1594,6 +1623,12 @@
         const projectName = parsed.meta?.team || parsed.meta?.subject || "הפרויקט החדש";
         if (!confirm(`לטעון את ${projectName} במקום הפרויקט המוצג כעת?`)) return;
         if (Array.isArray(parsed.studentRegistry)) safeLocalSet(registryStorageKey, JSON.stringify(parsed.studentRegistry));
+        const importedProjectId = String(parsed.meta?.id || `${parsed.meta?.school || "school"}-${parsed.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
+        const importedAssignmentStorageKey = `differential-project-${importedProjectId}-assignments-v1`;
+        const importedLockStorageKey = `differential-project-${importedProjectId}-locks-v1`;
+        safeLocalSet(importedAssignmentStorageKey, JSON.stringify(parsed.schedule.assignments));
+        if (parsed.locks && typeof parsed.locks === "object" && !Array.isArray(parsed.locks)) safeLocalSet(importedLockStorageKey, JSON.stringify(parsed.locks));
+        else localStorage.removeItem(importedLockStorageKey);
         safeLocalSet(activeProjectKey, JSON.stringify(parsed));
         location.reload();
         return;
@@ -1753,6 +1788,7 @@
   elements.addAssignmentButton.addEventListener("click", addAssignment);
   document.querySelector("#swapButton").addEventListener("click", openSwapDialog);
   elements.swapStudentSelect.addEventListener("change", renderSwapSuggestions);
+  elements.swapShowEdges.addEventListener("change", renderSwapSuggestions);
   elements.swapSuggestions.addEventListener("click", event => {
     const button = event.target.closest("[data-swap-index]");
     if (button) applySwap(elements.swapSuggestions._items?.[Number(button.dataset.swapIndex)]);

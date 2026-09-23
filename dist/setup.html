@@ -36,24 +36,47 @@
 
         <section class="wizard-step" data-step="1" hidden>
           <p class="eyebrow dark">תלמידים</p>
-          <h2>נעלה את נתוני התלמידים</h2>
-          <p>אפשר להשתמש בתבנית או לדלג ולקלוט תלמידים אחד־אחד מתוך המאגר.</p>
-          <div class="wizard-upload">
-            <label class="file-picker"><span>בחירת קובץ תלמידים</span><input id="studentFileInput" type="file" accept=".csv,text/csv" /></label>
-            <button id="studentTemplateButton" class="text-button" type="button">הורדת תבנית</button>
-          </div>
-          <div id="studentFileStatus" class="file-status" aria-live="polite">אפשר להמשיך גם ללא קובץ.</div>
+          <h2>איך נקלוט את התלמידים?</h2>
+          <p>הדרך הפשוטה היא לפתוח את הפרויקט ולהוסיף כל תלמיד במסך מונחה, יחד עם הסל האישי ומערכת השעות שלו.</p>
+          <div class="recommended-path"><span aria-hidden="true">✓</span><div><strong>מומלץ: קליטה מונחית מתוך מאגר התלמידים</strong><p>אין צורך להכין קובץ מראש. אפשר להמשיך עכשיו ולהוסיף תלמידים אחד־אחד לאחר פתיחת הפרויקט.</p></div></div>
+          <details class="advanced-import">
+            <summary>יש לי כבר גיליון מסודר — ייבוא מתקדם</summary>
+            <div class="wizard-upload">
+              <label class="file-picker"><span>בחירת קובץ תלמידים</span><input id="studentFileInput" type="file" accept=".csv,text/csv" /></label>
+              <button id="studentTemplateButton" class="text-button" type="button">הורדת תבנית CSV</button>
+            </div>
+            <div id="studentFileStatus" class="file-status" aria-live="polite">לא נבחר קובץ — וזה בסדר.</div>
+          </details>
         </section>
 
         <section class="wizard-step" data-step="2" hidden>
           <p class="eyebrow dark">צוות הוראה</p>
-          <h2>נעלה את זמינות המורים</h2>
-          <p>קובץ המורים דרוש כדי להציע שיבוץ ראשוני.</p>
-          <div class="wizard-upload">
-            <label class="file-picker"><span>בחירת קובץ מורים</span><input id="teacherFileInput" type="file" accept=".csv,text/csv" required /></label>
-            <button id="teacherTemplateButton" class="text-button" type="button">הורדת תבנית</button>
+          <h2>נוסיף את המורים הזמינים</h2>
+          <p>מוסיפים מורה, מסמנים את השעות שבהן אפשר לשבץ, וממשיכים למורה הבאה.</p>
+          <div class="teacher-entry">
+            <div class="teacher-entry-fields">
+              <label><span>שם המורה</span><input id="manualTeacherName" autocomplete="off" placeholder="שם מלא" /></label>
+              <label><span>מכסה רצויה</span><input id="manualTeacherPreferredQuota" type="number" min="0" max="20" value="1" /></label>
+              <label><span>מכסה מרבית</span><input id="manualTeacherMaxQuota" type="number" min="1" max="20" value="2" /></label>
+              <label><span>שכבות מתאימות <small>(רשות)</small></span><input id="manualTeacherGrades" autocomplete="off" placeholder="לדוגמה: י, יא" /></label>
+            </div>
+            <fieldset class="availability-fieldset">
+              <legend>שעות שבהן אפשר לשבץ</legend>
+              <p>לחצו על המשבצות המתאימות. אפשר לדייק אילוצים גם בהמשך.</p>
+              <div id="manualAvailabilityGrid" class="availability-grid"></div>
+            </fieldset>
+            <button id="addManualTeacherButton" class="primary-button" type="button">הוספת המורה לצוות</button>
+            <div id="manualTeacherMessage" class="file-status" role="status" aria-live="polite"></div>
           </div>
-          <div id="teacherFileStatus" class="file-status" aria-live="polite">טרם נבחר קובץ.</div>
+          <div id="manualTeacherList" class="manual-teacher-list" aria-label="מורים שנוספו"></div>
+          <details class="advanced-import">
+            <summary>ייבוא מתקדם מקובץ CSV</summary>
+            <div class="wizard-upload">
+              <label class="file-picker"><span>בחירת קובץ מורים</span><input id="teacherFileInput" type="file" accept=".csv,text/csv" /></label>
+              <button id="teacherTemplateButton" class="text-button" type="button">הורדת תבנית CSV</button>
+            </div>
+            <div id="teacherFileStatus" class="file-status" aria-live="polite">אפשר לבחור בין הזנה ידנית לבין ייבוא קובץ.</div>
+          </details>
         </section>
 
         <section class="wizard-step" data-step="3" hidden>
@@ -74,7 +97,7 @@
           <button id="createProjectButton" class="primary-button" type="submit" hidden disabled>פתיחת הפרויקט</button>
         </div>
       </form>
-      <p class="privacy-note">הקבצים נקראים במכשיר הזה בלבד ואינם נשלחים לשרת.</p>
+      <p class="privacy-note">הנתונים נקראים ונשמרים במכשיר הזה בלבד ואינם נשלחים לשרת.</p>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

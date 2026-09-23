@@ -189,11 +189,12 @@
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
         <div class="swap-intro">
-          <p>בחרו תלמיד או תלמידה. המערכת תציע החלפות ששומרות על היקף הזכאות ועל הקצאת שעות הצוות.</p>
+          <p>בחרו תלמיד או תלמידה. המערכת תציע החלפות מלאות. חריגה ממכסה תוצג כאזהרה ולא תסתיר את ההצעה.</p>
           <label class="option-picker swap-picker">
             <span>תלמיד/ה</span>
             <select id="swapStudentSelect"></select>
           </label>
+          <label class="swap-edge-toggle"><input id="swapShowEdges" type="checkbox" /> <span>הצגת קצוות יום (שעות 0 ו־8)</span></label>
         </div>
         <div id="swapSuggestions" class="swap-suggestions" aria-live="polite"></div>
         <div class="dialog-actions">
