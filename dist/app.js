@@ -461,7 +461,7 @@
   }
 
   function missingExplanation(student) {
-    const availability = studentData.get(student.student)?.candidates || [];
+    const availability = studentSlotsForOptions(student.student);
     if (!availability.length) return "לא הוגדרו לתלמיד/ה שעות זמינות במערכת האישית.";
     const matchingTeacherSlots = availability.filter(slot => [...teacherData.values()].some(teacher => teacherAllows(teacher.name, student.student) && teacher.candidates.some(candidate => candidate.day === slot.day && candidate.period === slot.period)));
     if (!matchingTeacherSlots.length) return "אין חפיפה בין השעות האפשריות של התלמיד/ה לבין זמינות של מורה מתאימה.";
@@ -740,8 +740,34 @@
     return activeConstraints.some(item => item.type === type && item.name === name && item.day === day && item.period === period);
   }
 
+  function continuedDayCandidate(studentName, day, period, currentId = null) {
+    if (period < 0) return null;
+    const record = studentRegistry.find(item => item.fullName === studentName);
+    const row = record?.schedule?.timetable?.find(item => item.period === period);
+    if (!row || String(row.lessons?.[day] || "").trim()) return null;
+    const continuesExistingLesson = assignments.some(item => item.id !== currentId && item.student === studentName && item.day === day && item.period === period + 1);
+    if (!continuesExistingLesson) return null;
+    const range = timeRangeForPeriod(period, record.schedule.timetable);
+    return { day, period, ...range, category: "קצה לפני", continued_day: true };
+  }
+
+  function studentSlotsForOptions(studentName, currentId = null) {
+    const student = studentData.get(studentName);
+    if (!student) return [];
+    const slots = [...(student.candidates || [])];
+    const knownSlots = new Set(slots.map(item => `${item.day}|${item.period}`));
+    assignments.filter(item => item.id !== currentId && item.student === studentName && item.period > 0).forEach(item => {
+      const candidate = continuedDayCandidate(studentName, item.day, item.period - 1, currentId);
+      if (!candidate || knownSlots.has(`${candidate.day}|${candidate.period}`)) return;
+      slots.push(candidate);
+      knownSlots.add(`${candidate.day}|${candidate.period}`);
+    });
+    return slots;
+  }
+
   function candidateForStudent(studentName, day, period) {
-    return studentData.get(studentName)?.candidates.find(item => item.day === day && item.period === period) || null;
+    return studentData.get(studentName)?.candidates.find(item => item.day === day && item.period === period)
+      || continuedDayCandidate(studentName, day, period);
   }
 
   function candidateQuality(candidate) {
@@ -956,7 +982,7 @@
     if (currentAssignment && !currentSlotStillUsed) teacherCounts.set(currentAssignment.teacher, (teacherCounts.get(currentAssignment.teacher) || 1) - 1);
     const options = [];
 
-    student.candidates.forEach(studentSlot => {
+    studentSlotsForOptions(studentName, currentId).forEach(studentSlot => {
       const slotKey = `${studentSlot.day}-${studentSlot.period}`;
       if (occupiedByStudent.has(slotKey)) return;
       if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
@@ -992,6 +1018,7 @@
           replaces_for_teacher: teacherSlot.replaces,
           replaces_student_lesson: studentSlot.replaces_student_lesson || null,
           avoid_if_possible: Boolean(studentSlot.avoid_if_possible),
+          continued_day: Boolean(studentSlot.continued_day),
           quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot) + teacherPreferencePenalty(teacherName, studentName),
           same,
           createsSplit,
@@ -1015,6 +1042,7 @@
     if (option.same) flags.push("נוכחי");
     if (option.period === 9) flags.push("שעה 9");
     if (option.student_slot_type.startsWith("קצה")) flags.push("מחוץ למערכת הרגילה");
+    if (option.continued_day) flags.push("רצף עם שעה קיימת");
     if (option.student_slot_type === "דריסת שיעור") flags.push("במקום שיעור קיים");
     if (option.createsSplit) flags.push("מורה נוספת לתלמיד/ה");
     if (option.overQuota) flags.push("חריגת מכסה");
@@ -2745,7 +2773,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=8").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=9").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
