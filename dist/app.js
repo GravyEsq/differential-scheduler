@@ -2001,6 +2001,22 @@
       ...payload.studentAvailability.students.map(item => item.student),
       ...studentRegistry.map(item => item.fullName)
     ].filter(Boolean));
+    const remapStudentKeys = source => {
+      Object.keys(source).forEach(oldName => {
+        const cleaned = stripStudentGradeSuffix(oldName);
+        if (!cleaned || cleaned === oldName || !names.has(cleaned)) return;
+        if (!Object.hasOwn(source, cleaned)) source[cleaned] = source[oldName];
+        delete source[oldName];
+      });
+    };
+    remapStudentKeys(activeLocks);
+    remapStudentKeys(defaultLocks);
+    remapStudentKeys(shareWilling);
+    activeConstraints.forEach(item => {
+      if (item.type !== "student") return;
+      const cleaned = stripStudentGradeSuffix(item.name);
+      if (cleaned && names.has(cleaned)) item.name = cleaned;
+    });
     const targets = new Map();
     names.forEach(name => {
       const cleaned = stripStudentGradeSuffix(name);
@@ -2723,7 +2739,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=7").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
