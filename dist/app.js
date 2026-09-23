@@ -40,6 +40,7 @@
   const constraintStorageKey = `differential-project-${projectId}-constraints-v1`;
   const shareStorageKey = `differential-project-${projectId}-share-v1`;
   const historyStorageKey = `differential-project-${projectId}-history-v1`;
+  const dismissedWarningStorageKey = `differential-project-${projectId}-dismissed-warnings-v1`;
   const registryStorageKey = "differential-student-registry-v1";
   const lastBackupKey = "differential-last-backup-v1";
   const maxBackupBytes = 15 * 1024 * 1024;
@@ -59,6 +60,8 @@
   let activeView = "schedule";
   let toastTimer = null;
   let saveStateTimer = null;
+  let isScheduling = false;
+  let dismissedWarnings = loadDismissedWarnings();
 
   const elements = {
     teacherFilter: document.querySelector("#teacherFilter"),
@@ -136,6 +139,11 @@
     studentDetailContent: document.querySelector("#studentDetailContent"),
     editStudentFromDetail: document.querySelector("#editStudentFromDetail"),
     settingsDialog: document.querySelector("#settingsDialog"),
+    teacherRulesDialog: document.querySelector("#teacherRulesDialog"),
+    ruleTeacher: document.querySelector("#ruleTeacher"),
+    reviewDialog: document.querySelector("#reviewDialog"),
+    reviewList: document.querySelector("#reviewList"),
+    schedulingBusy: document.querySelector("#schedulingBusy"),
     privacyDialog: document.querySelector("#privacyDialog"),
     lastBackupText: document.querySelector("#lastBackupText"),
     toast: document.querySelector("#toast")
@@ -143,8 +151,8 @@
 
   const studentData = new Map(payload.studentAvailability.students.map(student => [student.student, student]));
   const teacherData = new Map(payload.teacherAvailability.teachers.map(teacher => [teacher.name, teacher]));
-  const quotas = new Map(draft.teachers.map(teacher => [teacher.teacher, teacher.quota]));
-  const assignmentLimits = new Map(draft.teachers.map(teacher => [teacher.teacher, teacher.assignment_limit || teacher.quota]));
+  const quotas = new Map(draft.teachers.map(teacher => [teacher.teacher, teacher.preferred_quota ?? teacher.quota]));
+  const assignmentLimits = new Map(draft.teachers.map(teacher => [teacher.teacher, teacher.assignment_limit ?? teacher.quota]));
 
   function esc(value) {
     return String(value ?? "")
@@ -237,6 +245,24 @@
       sessionStorage.removeItem(historyStorageKey);
     }
     return [];
+  }
+
+  function loadDismissedWarnings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(dismissedWarningStorageKey));
+      if (Array.isArray(saved)) return new Set(saved.filter(item => typeof item === "string"));
+    } catch (_) {
+      localStorage.removeItem(dismissedWarningStorageKey);
+    }
+    return new Set();
+  }
+
+  function warningId(item) {
+    return `${item.level}|${item.text}`;
+  }
+
+  function saveDismissedWarnings() {
+    if (safeLocalSet(dismissedWarningStorageKey, JSON.stringify([...dismissedWarnings]))) markSaved();
   }
 
   function currentSnapshot(label) {
@@ -439,6 +465,7 @@
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
+      if ((teacherData.get(item.teacher)?.forbidden_periods || []).includes(item.period)) hardErrors.push(`השיבוץ של ${item.student} נקבע בשעה חסומה אצל ${item.teacher}`);
       if (!teacherAllows(item.teacher, item.student)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ השכבה של ${item.teacher}`);
       if (isConstrained("student", item.student, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ זמינות שהוגדר`);
       if (isConstrained("teacher", item.teacher, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.teacher} אינו תואם לאילוץ זמינות שהוגדר`);
@@ -488,7 +515,10 @@
       const used = byTeacher.get(teacher.teacher) || 0;
       const assignmentLimit = assignmentLimits.get(teacher.teacher);
       if (assignmentLimit !== undefined && used > assignmentLimit) warnings.push({ level: "warning", text: `${teacher.teacher} משובצ/ת ל-${used} שעות, מעבר למכסה שנקבעה (${assignmentLimit})` });
-      if (teacher.preferred_quota !== undefined && used > teacher.preferred_quota) warnings.push({ level: "warning", text: `${teacher.teacher} משובצ/ת ל-${used} שעות; היעד המועדף הוא ${teacher.preferred_quota}` });
+      if (teacher.preferred_quota !== undefined && used > teacher.preferred_quota) {
+        const approved = teacherData.get(teacher.teacher)?.allow_over_quota;
+        warnings.push({ level: "warning", text: `${teacher.teacher} משובצ/ת ל-${used} שעות; היעד המועדף הוא ${teacher.preferred_quota}${approved ? " (חריגה מאושרת)" : ""}` });
+      }
       const source = teacherData.get(teacher.teacher);
       const preferredGrades = source?.preferred_student_grades || (source?.preferred_student_grade ? [source.preferred_student_grade] : []);
       if (!preferredGrades.length) return;
@@ -508,7 +538,20 @@
   }
 
   function renderValidation() {
-    elements.validationList.innerHTML = scheduleWarnings().map(item => `<div class="validation-item ${item.level === "ok" ? "" : item.level}">${esc(item.text)}</div>`).join("");
+    const visible = scheduleWarnings().filter(item => item.level === "error" || !dismissedWarnings.has(warningId(item)));
+    elements.validationList._items = visible;
+    elements.validationList.innerHTML = visible.length
+      ? visible.map((item, index) => `<div class="validation-item ${item.level === "ok" ? "" : item.level}"><span>${esc(item.text)}</span>${item.level === "warning" ? `<button class="dismiss-warning" data-dismiss-warning="${index}" type="button">הסתרה</button>` : ""}</div>`).join("")
+      : `<div class="validation-empty">אין הערות פעילות במסך הראשי.</div>`;
+  }
+
+  function openReviewDialog() {
+    const items = scheduleWarnings();
+    elements.reviewList.innerHTML = items.map(item => {
+      const dismissed = item.level !== "error" && dismissedWarnings.has(warningId(item));
+      return `<div class="validation-item ${item.level === "ok" ? "" : item.level}"><span>${esc(item.text)}</span>${dismissed ? '<small class="dismissed-label">מוסתר במסך הראשי</small>' : ""}</div>`;
+    }).join("");
+    elements.reviewDialog.showModal();
   }
 
   function lessonsForStudent(studentName) {
@@ -617,6 +660,15 @@
     if (forbiddenGrades.length && matchesGrade(forbiddenGrades)) return false;
     if (!teacher.allowed_student_grades) return true;
     return matchesGrade(teacher.allowed_student_grades);
+  }
+
+  function teacherPreferencePenalty(teacherName, studentName) {
+    const teacher = teacherData.get(teacherName);
+    const preferredGrades = teacher?.preferred_student_grades || (teacher?.preferred_student_grade ? [teacher.preferred_student_grade] : []);
+    if (!preferredGrades.length) return 0;
+    const grade = draft.students.find(student => student.student === studentName)?.grade || "";
+    const group = grade.startsWith("יא") ? "יא" : grade.startsWith("יב") ? "יב" : grade.startsWith("י") ? "י" : grade;
+    return preferredGrades.includes(grade) || preferredGrades.includes(group) ? 0 : 3;
   }
 
   function isConstrained(type, name, day, period) {
@@ -775,9 +827,12 @@
   }
 
   function openLocksDialog() {
-    elements.locksList.innerHTML = Object.entries(defaultLocks).map(([studentName, teacherName]) => {
-      const checked = activeLocks[studentName] === teacherName ? "checked" : "";
-      return `<div class="lock-row"><div class="lock-copy"><strong>${esc(studentName)}</strong><span>שיוך קבוע: ${esc(teacherName)}</span></div><label class="lock-toggle"><span>שיוך פעיל</span><input type="checkbox" data-lock-student="${esc(studentName)}" ${checked}></label></div>`;
+    const teachers = draft.teachers.map(item => item.teacher).sort((a, b) => a.localeCompare(b, "he"));
+    elements.locksList.innerHTML = draft.students.slice().sort((a, b) => a.student.localeCompare(b.student, "he")).map(student => {
+      const current = activeLocks[student.student] || "";
+      const defaultTeacher = defaultLocks[student.student];
+      const options = [`<option value="">ללא נעילה</option>`, ...teachers.map(teacher => `<option value="${esc(teacher)}" ${teacher === current ? "selected" : ""}>${esc(teacher)}</option>`)].join("");
+      return `<div class="lock-row"><div class="lock-copy"><strong>${esc(student.student)}</strong><span>${esc(student.grade)}${defaultTeacher ? ` · שיוך ברירת מחדל: ${esc(defaultTeacher)}` : ""}</span></div><label class="lock-select"><span>מורה נעולה</span><select data-lock-student="${esc(student.student)}">${options}</select></label></div>`;
     }).join("");
     elements.locksDialog.showModal();
   }
@@ -786,9 +841,9 @@
     const nextLocks = {};
     elements.locksList.querySelectorAll("[data-lock-student]").forEach(input => {
       const studentName = input.dataset.lockStudent;
-      if (input.checked) nextLocks[studentName] = defaultLocks[studentName];
+      if (input.value) nextLocks[studentName] = input.value;
     });
-    const releasedCount = Object.keys(defaultLocks).length - Object.keys(nextLocks).length;
+    const releasedCount = Object.keys(activeLocks).filter(studentName => !nextLocks[studentName]).length;
     if (JSON.stringify(nextLocks) === JSON.stringify(activeLocks)) {
       elements.locksDialog.close();
       showToast("לא בוצעו שינויים בשיוכים הקבועים.");
@@ -799,7 +854,7 @@
     saveLocks();
     elements.locksDialog.close();
     renderAll();
-    showToast(releasedCount ? `${releasedCount} שיוכים קבועים אינם פעילים כעת.` : "כל השיוכים הקבועים פעילים.");
+    showToast(releasedCount ? `${releasedCount} נעילות שוחררו. יתר השיוכים נשמרו.` : "השיוכים הקבועים נשמרו.");
   }
 
   function maxConsecutive(periods) {
@@ -851,9 +906,12 @@
         if (!teacherSlot) return;
         if (occupiedByTeacher.has(`${teacherName}-${slotKey}`)) return;
         const assignmentLimit = assignmentLimits.get(teacherName);
+        const preferredQuota = quotas.get(teacherName) ?? assignmentLimit;
         const projectedTeacherLoad = (teacherCounts.get(teacherName) || 0) + 1;
         const overQuota = assignmentLimit !== undefined && projectedTeacherLoad > assignmentLimit;
-        if (overQuota && !includeOverQuota) return;
+        const overPreferred = preferredQuota !== undefined && projectedTeacherLoad > preferredQuota;
+        const allowOverPreferred = teacher.allow_over_quota ?? (assignmentLimit !== undefined && assignmentLimit > preferredQuota);
+        if ((overQuota || (overPreferred && !allowOverPreferred)) && !includeOverQuota) return;
         if (!teacherConsecutiveOptionIsLegal(teacherName, studentSlot.day, studentSlot.period, currentId)) return;
         const same = Boolean(currentAssignment) && teacherName === currentAssignment.teacher && studentSlot.day === currentAssignment.day && studentSlot.period === currentAssignment.period;
         const siblingTeachers = new Set(assignments.filter(item => item.id !== currentId && item.student === studentName).map(item => item.teacher));
@@ -869,10 +927,12 @@
           replaces_for_teacher: teacherSlot.replaces,
           replaces_student_lesson: studentSlot.replaces_student_lesson || null,
           avoid_if_possible: Boolean(studentSlot.avoid_if_possible),
-          quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot),
+          quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot) + teacherPreferencePenalty(teacherName, studentName),
           same,
           createsSplit,
           overQuota,
+          overPreferred,
+          allowOverPreferred,
           projectedTeacherLoad,
           assignmentLimit
         });
@@ -893,6 +953,7 @@
     if (option.student_slot_type === "דריסת שיעור") flags.push("במקום שיעור קיים");
     if (option.createsSplit) flags.push("מורה נוספת לתלמיד/ה");
     if (option.overQuota) flags.push("חריגת מכסה");
+    else if (option.overPreferred) flags.push("מעבר ליעד המועדף");
     return `${option.day}, שעה ${option.period} · ${option.teacher}${flags.length ? ` — ${flags.join(", ")}` : ""}`;
   }
 
@@ -908,8 +969,9 @@
     const assignmentLimit = assignmentLimits.get(option.teacher);
     if (assignmentLimit !== undefined && projectedTeacher > assignmentLimit) {
       warnings.push(`${option.teacher} תחרוג מהמכסה (${projectedTeacher}/${assignmentLimit})`);
-    } else if (preferredQuota !== undefined && teacherSummary && projectedTeacher > preferredQuota && projectedTeacher <= teacherSummary.quota) {
-      warnings.push(`${option.teacher} תחרוג מהיעד המועדף של ${preferredQuota} שעות, אך לא מהמכסה המרבית`);
+    } else if (preferredQuota !== undefined && teacherSummary && projectedTeacher > preferredQuota && projectedTeacher <= assignmentLimit) {
+      const approved = teacherData.get(option.teacher)?.allow_over_quota ?? assignmentLimit > preferredQuota;
+      warnings.push(`${option.teacher} תחרוג מהיעד המועדף של ${preferredQuota} שעות, אך לא מהמכסה המרבית${approved ? " (חריגה מאושרת)" : ""}`);
     }
     const selectedStudent = studentName || currentAssignment?.student;
     const selectedGrade = draft.students.find(item => item.student === selectedStudent)?.grade || "";
@@ -1149,7 +1211,19 @@
     elements.recalculateDialog.showModal();
   }
 
-  function recalculateMissingAssignments() {
+  function setSchedulingBusy(busy) {
+    document.body.classList.toggle("is-scheduling", busy);
+    elements.schedulingBusy.hidden = !busy;
+    document.querySelector("#recalculateButton").disabled = busy;
+    elements.nextActionButton.disabled = busy;
+  }
+
+  async function recalculateMissingAssignments() {
+    if (isScheduling) return;
+    isScheduling = true;
+    setSchedulingBusy(true);
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    try {
     const originalAssignments = assignments;
     const repaired = assignmentsToRepair();
     const repairedIds = new Set(repaired.map(({ item }) => item.id));
@@ -1160,7 +1234,7 @@
     if (!totalMissing) {
       assignments = originalAssignments;
       if (repaired.length) {
-        captureUndo("תיקון והשלמת שיבוצים");
+        captureUndo("סידור מערכת");
         assignments = fixedAssignments;
         saveAssignments();
         renderAll();
@@ -1220,13 +1294,17 @@
     const finalAssignments = fixedAssignments.concat(bestAdditions);
     assignments = originalAssignments;
     if (repaired.length || bestAdditions.length) {
-      captureUndo("תיקון והשלמת שיבוצים");
+      captureUndo("סידור מערכת");
       assignments = finalAssignments;
       saveAssignments();
       renderAll();
       showToast(repaired.length ? "השיבוצים נבדקו ותוקנו לפי האילוצים הפעילים." : `הושלמו ${bestAdditions.length} שעות חסרות.`);
     }
     showRecalculationResult({ added: bestAdditions.length, repaired, remaining: missingStudents(), searchStopped });
+    } finally {
+      isScheduling = false;
+      setSchedulingBusy(false);
+    }
   }
 
   function deleteAssignment() {
@@ -1396,7 +1474,7 @@
     if (hardErrorCount) {
       elements.nextActionTitle.textContent = `נמצאו ${hardErrorCount} שיבוצים שדורשים תיקון`;
       elements.nextActionDescription.textContent = "המערכת יכולה לשחרר שיבוצים שסותרים אילוץ פעיל ולחפש להם חלופה חוקית, בלי לשנות שיבוצים תקינים.";
-      elements.nextActionButton.textContent = "תיקון והשלמת שיבוצים";
+      elements.nextActionButton.textContent = "סידור מערכת";
       elements.nextActionButton.dataset.action = "recalculate";
       return;
     }
@@ -1404,7 +1482,7 @@
       const missingHours = missing.reduce((sum, item) => sum + item.missingNow, 0);
       elements.nextActionTitle.textContent = `נותרו ${missingHours} שעות זכאות לשיבוץ`;
       elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. המערכת תתקן גם שיבוצים שסותרים אילוץ פעיל, ואז תנסה להשלים את כל החוסרים.`;
-      elements.nextActionButton.textContent = "תיקון והשלמת שיבוצים";
+      elements.nextActionButton.textContent = "סידור מערכת";
       elements.nextActionButton.dataset.action = "recalculate";
       return;
     }
@@ -1429,7 +1507,7 @@
   function handleNextAction() {
     const action = elements.nextActionButton.dataset.action;
     if (action === "recalculate") return recalculateMissingAssignments();
-    if (action === "warnings") return focusAttentionPanel();
+    if (action === "warnings") return openReviewDialog();
     if (action === "report") openDeputyReport();
   }
 
@@ -1710,6 +1788,80 @@
     showToast("הגדרות הפרויקט נשמרו.");
   }
 
+  function parseList(value) {
+    return String(value || "").split(/[,\n]/).map(item => item.trim()).filter(Boolean);
+  }
+
+  function parsePeriods(value) {
+    return [...new Set(parseList(value).map(Number).filter(period => Number.isInteger(period) && period >= 0 && period <= 9))].sort((a, b) => a - b);
+  }
+
+  function selectedTeacherRule() {
+    const teacherName = elements.ruleTeacher.value;
+    return {
+      teacherName,
+      summary: draft.teachers.find(item => item.teacher === teacherName),
+      source: teacherData.get(teacherName)
+    };
+  }
+
+  function refreshTeacherRules() {
+    const { summary, source } = selectedTeacherRule();
+    if (!summary || !source) return;
+    const preferred = summary.preferred_quota ?? summary.quota ?? 0;
+    const maximum = summary.assignment_limit ?? summary.quota ?? preferred;
+    document.querySelector("#rulePreferredQuota").value = preferred;
+    document.querySelector("#ruleAssignmentLimit").value = maximum;
+    document.querySelector("#ruleAllowOverQuota").checked = source.allow_over_quota ?? maximum > preferred;
+    document.querySelector("#ruleMaxConsecutive").value = source.max_consecutive || "";
+    document.querySelector("#ruleForbiddenPeriods").value = (source.forbidden_periods || []).join(", ");
+    document.querySelector("#ruleAllowedGrades").value = (source.allowed_student_grades || []).join(", ");
+    document.querySelector("#ruleForbiddenGrades").value = (source.forbidden_student_grades || source.excluded_student_grades || []).join(", ");
+    const preferredGrades = source.preferred_student_grades || (source.preferred_student_grade ? [source.preferred_student_grade] : []);
+    document.querySelector("#rulePreferredGrades").value = preferredGrades.join(", ");
+  }
+
+  function openTeacherRulesDialog() {
+    const current = elements.ruleTeacher.value;
+    const names = draft.teachers.map(item => item.teacher).sort((a, b) => a.localeCompare(b, "he"));
+    elements.ruleTeacher.innerHTML = names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
+    if (names.includes(current)) elements.ruleTeacher.value = current;
+    refreshTeacherRules();
+    elements.teacherRulesDialog.showModal();
+  }
+
+  function saveTeacherRules() {
+    const { teacherName, summary, source } = selectedTeacherRule();
+    if (!teacherName || !summary || !source) return;
+    const preferred = Number(document.querySelector("#rulePreferredQuota").value);
+    const maximum = Number(document.querySelector("#ruleAssignmentLimit").value);
+    if (!Number.isInteger(preferred) || preferred < 0 || !Number.isInteger(maximum) || maximum < preferred) {
+      alert("יש להזין יעד שעות ומכסה מרבית תקינים. המכסה המרבית אינה יכולה להיות נמוכה מהיעד המועדף.");
+      return;
+    }
+    summary.preferred_quota = preferred;
+    summary.quota = maximum;
+    summary.assignment_limit = maximum;
+    source.allow_over_quota = document.querySelector("#ruleAllowOverQuota").checked;
+    const maxConsecutive = Number(document.querySelector("#ruleMaxConsecutive").value);
+    if (Number.isInteger(maxConsecutive) && maxConsecutive >= 1) source.max_consecutive = Math.min(7, maxConsecutive);
+    else delete source.max_consecutive;
+    source.forbidden_periods = parsePeriods(document.querySelector("#ruleForbiddenPeriods").value);
+    source.allowed_student_grades = parseList(document.querySelector("#ruleAllowedGrades").value);
+    source.forbidden_student_grades = parseList(document.querySelector("#ruleForbiddenGrades").value);
+    delete source.excluded_student_grades;
+    source.preferred_student_grades = parseList(document.querySelector("#rulePreferredGrades").value);
+    delete source.preferred_student_grade;
+    quotas.set(teacherName, preferred);
+    assignmentLimits.set(teacherName, maximum);
+    payload.schedule = draft;
+    payload.teacherAvailability.teachers = [...teacherData.values()];
+    if (safeLocalSet(activeProjectKey, JSON.stringify(payload))) markSaved();
+    elements.teacherRulesDialog.close();
+    renderAll();
+    showToast(`הגדרות ${teacherName} נשמרו ונכללות בסידור המערכת.`);
+  }
+
   function updateBackupMessage() {
     const value = localStorage.getItem(lastBackupKey);
     elements.lastBackupText.textContent = value
@@ -1743,7 +1895,6 @@
       showToast("הדפדפן חסם את פתיחת הדו״ח. יש לאפשר חלונות קופצים ולנסות שוב.");
       return;
     }
-    const metrics = currentMetrics();
     const reportDate = new Intl.DateTimeFormat("he-IL", { dateStyle: "long" }).format(new Date());
     const rows = draft.students.map(student => {
       const lessons = lessonsForStudent(student.student).sort((a, b) => days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period || a.teacher.localeCompare(b.teacher, "he"));
@@ -1753,10 +1904,9 @@
         : "לא שובץ";
       return `<tr><td class="student-name"><strong>${esc(student.student)}</strong></td><td>${esc(student.grade)}</td><td class="centered">${student.required}</td><td>${lessonText}</td><td class="status ${missing ? "problem" : "ok"}">${missing ? `חסרה ${missing}` : "מלא"}</td></tr>`;
     }).join("");
-    const warnings = scheduleWarnings().map(item => `<li>${esc(item.text)}</li>`).join("");
     reportWindow.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>דו״ח שיבוצי ${esc(projectMeta.subject)} דיפרנציאליים</title><style>
-      @page{size:A4 landscape;margin:10mm 12mm 12mm}*{box-sizing:border-box}html{background:#edf1f4}body{margin:0;padding:28px;color:#172a40;background:#edf1f4;font-family:Arial,"Noto Sans Hebrew",sans-serif;font-size:14px;line-height:1.45}.report-page{width:min(1120px,100%);margin:0 auto;padding:36px 42px 30px;background:#fff;box-shadow:0 12px 38px rgba(28,58,91,.16)}header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:0 0 16px;border-bottom:3px solid #1d4f7a}h1{margin:0 0 5px;font-size:27px;line-height:1.2;color:#143a61}p{margin:0;color:#5d6d7e}.report-date{white-space:nowrap;font-size:12px}.actions{margin:17px 0 0}.actions button{padding:10px 16px;border:0;border-radius:6px;color:#fff;background:#1e5a91;font:inherit;font-weight:700;cursor:pointer}.print-guide{display:inline-block;margin-right:10px;color:#647487;font-size:12px}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:19px 0}.summary div{min-height:78px;padding:12px 14px;border:1px solid #d7e0e9;border-top:3px solid #9bb8d1;background:#fbfcfe}.summary strong{display:block;margin-bottom:3px;font-size:22px;line-height:1.05;color:#173f67}.summary span{color:#5c6d7e;font-size:12px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:9px 10px;text-align:right;vertical-align:top;border:1px solid #d5dee7;line-height:1.45}th{color:#fff;background:#1a527f;font-size:12px;font-weight:700}th:nth-child(1){width:22%}th:nth-child(2){width:8%}th:nth-child(3){width:8%}th:nth-child(4){width:48%}th:nth-child(5){width:14%}tbody tr:nth-child(even){background:#f7f9fb}.student-name{color:#183b62}.centered,.status{text-align:center}.lesson-list{display:grid;gap:2px}.lesson-list span{position:relative;padding-right:10px}.lesson-list span::before{content:"";position:absolute;top:.62em;right:0;width:4px;height:4px;border-radius:50%;background:#5a8ab0}.status{font-weight:700;white-space:nowrap}.ok{color:#126b61}.problem{color:#9b4f00}.notes{margin-top:16px;padding:12px 15px;border-right:4px solid #8faec9;background:#f3f7fa}.notes h2{margin:0 0 7px;font-size:14px;color:#173f67}.notes ul{margin:0;padding-right:19px}.notes li{margin:3px 0}.footer{margin-top:13px;color:#718091;font-size:11px}@media(max-width:700px){body{padding:0;background:#fff}.report-page{padding:24px 18px;box-shadow:none}header{align-items:flex-start;flex-direction:column}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.print-guide{display:none}th,td{padding:7px 6px;font-size:12px}th:nth-child(1){width:25%}th:nth-child(2),th:nth-child(3){width:9%}th:nth-child(4){width:42%}th:nth-child(5){width:15%}}@media print{html,body{width:100%;height:auto;background:#fff}body{padding:0;color:#111;font-size:10.5pt}.report-page{width:100%;margin:0;padding:0;box-shadow:none}h1{font-size:22pt}.actions,.print-guide{display:none}.summary{margin:12px 0;gap:6px}.summary div{min-height:0;padding:8px 10px}.summary strong{font-size:17pt}th,td{padding:6px 7px;font-size:10pt}thead{display:table-header-group}tr,.summary,.notes,header{break-inside:avoid;page-break-inside:avoid}.notes{margin-top:10px}.footer{font-size:9pt}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-    </style></head><body><main class="report-page"><header><div><h1>דו״ח שיבוצי ${esc(projectMeta.subject)} דיפרנציאליים</h1><p>${esc(projectMeta.school)} · ${esc(projectMeta.year)}</p></div><p class="report-date">הופק בתאריך ${esc(reportDate)}</p></header><div class="actions"><button onclick="window.print()">הדפסה או שמירה כ־PDF</button><span class="print-guide">מותאם ל־A4 לרוחב</span></div><section class="summary"><div><strong>${metrics.assigned}</strong><span>שעות משובצות</span></div><div><strong>${metrics.coveredStudents}</strong><span>תלמידים עם שיבוץ</span></div><div><strong>${metrics.missing}</strong><span>שעות זכאות שטרם שובצו</span></div><div><strong>${metrics.late}</strong><span>שיבוצים בשעה האחרונה</span></div></section><table><thead><tr><th>שם התלמיד/ה</th><th>כיתה</th><th>זכאות</th><th>שעות ומורה</th><th>מצב</th></tr></thead><tbody>${rows}</tbody></table><section class="notes"><h2>הערות ובקרות</h2><ul>${warnings}</ul></section><p class="footer">הדו״ח משקף את הגרסה השמורה במחשב בעת הפקתו.</p></main></body></html>`);
+      @page{size:A4 landscape;margin:10mm 12mm 12mm}*{box-sizing:border-box}html{background:#edf1f4}body{margin:0;padding:28px;color:#172a40;background:#edf1f4;font-family:Arial,"Noto Sans Hebrew",sans-serif;font-size:14px;line-height:1.45}.report-page{width:min(1120px,100%);margin:0 auto;padding:36px 42px 30px;background:#fff;box-shadow:0 12px 38px rgba(28,58,91,.16)}header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:0 0 16px;border-bottom:3px solid #1d4f7a}h1{margin:0 0 5px;font-size:27px;line-height:1.2;color:#143a61}p{margin:0;color:#5d6d7e}.report-date{white-space:nowrap;font-size:12px}.actions{margin:17px 0}.actions button{padding:10px 16px;border:0;border-radius:6px;color:#fff;background:#1e5a91;font:inherit;font-weight:700;cursor:pointer}.print-guide{display:inline-block;margin-right:10px;color:#647487;font-size:12px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:9px 10px;text-align:right;vertical-align:top;border:1px solid #d5dee7;line-height:1.45}th{color:#fff;background:#1a527f;font-size:12px;font-weight:700}th:nth-child(1){width:22%}th:nth-child(2){width:8%}th:nth-child(3){width:8%}th:nth-child(4){width:48%}th:nth-child(5){width:14%}tbody tr:nth-child(even){background:#f7f9fb}.student-name{color:#183b62}.centered,.status{text-align:center}.lesson-list{display:grid;gap:2px}.lesson-list span{position:relative;padding-right:10px}.lesson-list span::before{content:"";position:absolute;top:.62em;right:0;width:4px;height:4px;border-radius:50%;background:#5a8ab0}.status{font-weight:700;white-space:nowrap}.ok{color:#126b61}.problem{color:#9b4f00}@media(max-width:700px){body{padding:0;background:#fff}.report-page{padding:24px 18px;box-shadow:none}header{align-items:flex-start;flex-direction:column}.print-guide{display:none}th,td{padding:7px 6px;font-size:12px}th:nth-child(1){width:25%}th:nth-child(2),th:nth-child(3){width:9%}th:nth-child(4){width:42%}th:nth-child(5){width:15%}}@media print{html,body{width:100%;height:auto;background:#fff}body{padding:0;color:#111;font-size:10.5pt}.report-page{width:100%;margin:0;padding:0;box-shadow:none}h1{font-size:22pt}.actions,.print-guide{display:none}th,td{padding:6px 7px;font-size:10pt}thead{display:table-header-group}tr,header{break-inside:avoid;page-break-inside:avoid}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    </style></head><body><main class="report-page"><header><div><h1>דו״ח שיבוצי ${esc(projectMeta.subject)} דיפרנציאליים</h1><p>${esc(projectMeta.school)} · ${esc(projectMeta.year)}</p></div><p class="report-date">הופק בתאריך ${esc(reportDate)}</p></header><div class="actions"><button onclick="window.print()">הדפסה או שמירה כ־PDF</button><span class="print-guide">מותאם ל־A4 לרוחב</span></div><table><thead><tr><th>שם התלמיד/ה</th><th>כיתה</th><th>זכאות</th><th>שעות ומורה</th><th>מצב</th></tr></thead><tbody>${rows}</tbody></table></main></body></html>`);
     reportWindow.document.close();
   }
 
@@ -1811,8 +1961,10 @@
       throw new Error("נתוני השיוכים הקבועים בקובץ אינם תקינים.");
     }
     const restored = {};
+    const knownStudents = new Set(draft.students.map(item => item.student));
+    const knownTeachers = new Set(draft.teachers.map(item => item.teacher));
     Object.entries(data.locks).forEach(([studentName, teacherName]) => {
-      if (defaultLocks[studentName] !== teacherName) throw new Error("הקובץ כולל שיוך קבוע שאינו מוכר למערכת.");
+      if (!knownStudents.has(studentName) || !knownTeachers.has(teacherName)) throw new Error("הקובץ כולל שיוך קבוע שאינו מוכר למערכת.");
       restored[studentName] = teacherName;
     });
     return restored;
@@ -1829,9 +1981,11 @@
         const importedProjectId = String(parsed.meta?.id || `${parsed.meta?.school || "school"}-${parsed.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
         const importedAssignmentStorageKey = `differential-project-${importedProjectId}-assignments-v1`;
         const importedLockStorageKey = `differential-project-${importedProjectId}-locks-v1`;
+        const importedDismissedWarningStorageKey = `differential-project-${importedProjectId}-dismissed-warnings-v1`;
         safeLocalSet(importedAssignmentStorageKey, JSON.stringify(parsed.schedule.assignments));
         if (parsed.locks && typeof parsed.locks === "object" && !Array.isArray(parsed.locks)) safeLocalSet(importedLockStorageKey, JSON.stringify(parsed.locks));
         else localStorage.removeItem(importedLockStorageKey);
+        localStorage.removeItem(importedDismissedWarningStorageKey);
         safeLocalSet(activeProjectKey, JSON.stringify(parsed));
         location.reload();
         return;
@@ -1846,6 +2000,8 @@
       activeConstraints = Array.isArray(parsed.constraints) ? parsed.constraints : [];
       shareWilling = parsed.shareWilling && typeof parsed.shareWilling === "object" ? parsed.shareWilling : loadShareWilling();
       if (Array.isArray(parsed.studentRegistry)) studentRegistry = parsed.studentRegistry;
+      dismissedWarnings = new Set();
+      localStorage.removeItem(dismissedWarningStorageKey);
       saveAssignments();
       saveLocks();
       saveConstraints();
@@ -1870,6 +2026,8 @@
     localStorage.removeItem(lockStorageKey);
     localStorage.removeItem(constraintStorageKey);
     localStorage.removeItem(shareStorageKey);
+    localStorage.removeItem(dismissedWarningStorageKey);
+    dismissedWarnings = new Set();
     renderAll();
     showToast("הגרסה הראשונית שוחזרה.");
   }
@@ -1999,6 +2157,9 @@
   });
   document.querySelector("#locksButton").addEventListener("click", openLocksDialog);
   document.querySelector("#saveLocksButton").addEventListener("click", commitLocks);
+  document.querySelector("#teacherRulesButton").addEventListener("click", openTeacherRulesDialog);
+  elements.ruleTeacher.addEventListener("change", refreshTeacherRules);
+  document.querySelector("#saveTeacherRulesButton").addEventListener("click", saveTeacherRules);
   document.querySelector("#shareButton").addEventListener("click", openShareDialog);
   document.querySelector("#saveShareWillingButton").addEventListener("click", commitShareWilling);
   elements.shareSuggestions.addEventListener("click", event => {
@@ -2025,7 +2186,24 @@
   document.querySelector("#resetButton").addEventListener("click", resetLocalChanges);
   elements.undoButton.addEventListener("click", undoLastAction);
   elements.nextActionButton.addEventListener("click", handleNextAction);
-  elements.reviewWarningsButton.addEventListener("click", focusAttentionPanel);
+  elements.reviewWarningsButton.addEventListener("click", openReviewDialog);
+  elements.validationList.addEventListener("click", event => {
+    const button = event.target.closest("[data-dismiss-warning]");
+    const item = button && elements.validationList._items?.[Number(button.dataset.dismissWarning)];
+    if (!item || item.level === "error") return;
+    dismissedWarnings.add(warningId(item));
+    saveDismissedWarnings();
+    renderAll();
+    showToast("ההערה הוסתרה מהמסך הראשי. היא נשארה זמינה במסך הבקרה.");
+  });
+  document.querySelector("#restoreWarningsButton").addEventListener("click", () => {
+    dismissedWarnings = new Set();
+    saveDismissedWarnings();
+    renderAll();
+    elements.reviewDialog.close();
+    openReviewDialog();
+    showToast("כל ההערות הוחזרו למסך הראשי.");
+  });
   elements.addRequestRowButton.addEventListener("click", () => addRequestRow());
   elements.requestRows.addEventListener("click", event => {
     const button = event.target.closest("[data-remove-request]");

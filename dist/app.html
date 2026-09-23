@@ -118,7 +118,7 @@
           </div>
           <div class="side-actions">
             <button id="manualButton" class="primary-button" type="button">שיבוץ ידני</button>
-            <button id="recalculateButton" class="primary-button" type="button">תיקון והשלמת שיבוצים</button>
+            <button id="recalculateButton" class="primary-button" type="button">סידור מערכת</button>
             <button id="reportButton" class="primary-button" type="button">הפקת דו״ח</button>
             <details class="management-menu">
               <summary>ניהול וכלים</summary>
@@ -127,6 +127,7 @@
                 <button id="shareButton" class="secondary-button share-launch" type="button">שיבוץ זוגי</button>
                 <button id="constraintsButton" class="secondary-button" type="button">ניהול אילוצים</button>
                 <button id="locksButton" class="secondary-button" type="button">שיוכים קבועים</button>
+                <button id="teacherRulesButton" class="secondary-button" type="button">הגדרות צוות</button>
                 <button id="settingsButton" class="secondary-button" type="button">הגדרות הפרויקט</button>
                 <button id="exportButton" class="secondary-button" type="button">הורדת גיבוי</button>
                 <button id="importButton" class="secondary-button" type="button">שחזור מגיבוי</button>
@@ -186,7 +187,7 @@
     <dialog id="recalculateDialog" class="edit-dialog">
       <form method="dialog" class="dialog-shell">
         <div class="dialog-head">
-          <div><p class="eyebrow dark">תיקון והשלמת שיבוצים</p><h2>תוצאת החישוב מחדש</h2></div>
+          <div><p class="eyebrow dark">סידור מערכת</p><h2>תוצאת החישוב</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
         <div id="recalculateSummary" class="dialog-note"></div>
@@ -223,12 +224,49 @@
           <div><p class="eyebrow dark">העדפות שיוך</p><h2>ניהול שיוכים קבועים</h2></div>
           <button class="close-button" value="cancel" aria-label="סגירה">×</button>
         </div>
-        <p class="locks-intro">ביטול שיוך קבוע אינו משנה שיבוץ קיים. הוא מאפשר למערכת להציע מורים נוספים בחלופות עתידיות.</p>
+        <p class="locks-intro">בחרו מורה כדי לנעול תלמיד או תלמידה אליה. בחירה ב״ללא נעילה״ משחררת את השיוך. שינוי נעילה אינו משנה שיבוץ קיים, אך ישפיע על ההצעות ועל סידור המערכת בהמשך.</p>
         <div id="locksList" class="locks-list"></div>
         <div class="dialog-actions">
           <button id="saveLocksButton" class="primary-button" type="button">שמירת השיוכים</button>
           <button class="secondary-button" value="cancel">ביטול</button>
         </div>
+      </form>
+    </dialog>
+
+    <dialog id="teacherRulesDialog" class="edit-dialog teacher-rules-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">מדיניות השיבוץ</p><h2>הגדרות צוות</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <p class="locks-intro">הגדירו כאן העדפות ואילוצים לכל מורה. שדות ריקים אינם מגבילים את השיבוץ.</p>
+        <div class="teacher-rules-picker"><label><span>מורה</span><select id="ruleTeacher"></select></label></div>
+        <div class="settings-form teacher-rules-form">
+          <label><span>יעד שעות מועדף</span><input id="rulePreferredQuota" type="number" min="0" max="50" /></label>
+          <label><span>מכסת שעות מרבית</span><input id="ruleAssignmentLimit" type="number" min="0" max="50" /></label>
+          <label class="wide-field choice-card compact-choice"><input id="ruleAllowOverQuota" type="checkbox" /><span><strong>אפשר לסידור המערכת לחרוג מהיעד המועדף</strong><small>לעולם לא מעבר למכסה המרבית. בהסרה, הסידור האוטומטי יעצור ביעד המועדף.</small></span></label>
+          <label><span>מספר שעות רצופות מרבי</span><input id="ruleMaxConsecutive" type="number" min="1" max="7" placeholder="ללא הגבלה" /></label>
+          <label><span>שעות חסומות</span><input id="ruleForbiddenPeriods" placeholder="לדוגמה: 0, 9" /></label>
+          <label class="wide-field"><span>שכבות מותרות</span><input id="ruleAllowedGrades" placeholder="לדוגמה: יא, יא4" /></label>
+          <label class="wide-field"><span>שכבות חסומות</span><input id="ruleForbiddenGrades" placeholder="לדוגמה: יא5" /></label>
+          <label class="wide-field"><span>שכבות מועדפות</span><input id="rulePreferredGrades" placeholder="לדוגמה: י, יא" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button id="saveTeacherRulesButton" class="primary-button" type="button">שמירת הגדרות צוות</button>
+          <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="reviewDialog" class="edit-dialog review-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">בקרת שיבוץ</p><h2>כל הנושאים לבדיקה</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <p class="locks-intro">כאן מוצגים גם פריטים שהוסתרו מהמסך הראשי. שגיאות פעילות תמיד נשארות גלויות במסך הראשי.</p>
+        <div id="reviewList" class="review-list"></div>
+        <div class="dialog-actions"><button id="restoreWarningsButton" class="secondary-button" type="button">החזרת כל ההערות למסך הראשי</button><button class="primary-button" value="cancel">סגירה</button></div>
       </form>
     </dialog>
 
@@ -305,6 +343,9 @@
       <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">שמירה ופרטיות</p><h2>הנתונים נשארים במכשיר</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="privacy-content"><p>שמות התלמידים, מערכות השעות והשיבוצים נשמרים באחסון המקומי של הדפדפן. האתר אינו שולח אותם לשרת.</p><div class="privacy-callout"><strong>כדי לא לאבד מידע</strong><span>מומלץ להוריד גיבוי בסיום כל יום עבודה ולשמור אותו בכונן מאובטח של בית הספר.</span></div><p id="lastBackupText">טרם הורד גיבוי מהמכשיר הזה.</p></div><div class="dialog-actions"><button id="privacyBackupButton" class="primary-button" type="button">הורדת גיבוי עכשיו</button><button class="secondary-button" value="cancel">סגירה</button></div></form>
     </dialog>
 
+    <div id="schedulingBusy" class="scheduling-busy" role="status" aria-live="assertive" aria-busy="true" hidden>
+      <div class="scheduling-busy-card"><i aria-hidden="true"></i><strong>מסדרים את המערכת…</strong><span>בודקים אילוצים ומחפשים שיבוצים מתאימים.</span></div>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="schedule-data.js"></script>
