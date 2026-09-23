@@ -52,7 +52,7 @@
         </div>
       </section>
 
-      <section id="summarySection" class="summary" aria-label="סיכום השיבוץ">
+      <section id="summarySection" class="summary" aria-label="סיכום השיבוץ" aria-live="polite" aria-atomic="true">
         <article><strong id="assignedCount">—</strong><span>שעות משובצות</span></article>
         <article><strong id="studentCount">—</strong><span>תלמידים עם שיבוץ</span></article>
         <article><strong id="missingCount">—</strong><span>שעות זכאות שטרם שובצו</span></article>
@@ -94,7 +94,7 @@
               <span class="hint">לחיצה על שיבוץ פותחת אפשרויות שינוי</span>
             </div>
             <div class="schedule-wrap">
-              <div id="scheduleGrid" class="schedule-grid" role="grid" aria-label="מערכת שיבוצים שבועית"></div>
+              <div id="scheduleGrid" class="schedule-grid" role="grid" aria-label="מערכת שיבוצים שבועית. בכל שיבוץ אפשר ללחוץ כדי לערוך או להזיז אותו."></div>
             </div>
           </div>
           <div id="studentsView" class="content-view" role="tabpanel" aria-labelledby="studentsTab" hidden></div>
@@ -107,19 +107,20 @@
             <span class="warning-icon" aria-hidden="true">!</span>
             <div><h2>נושאים לבדיקה</h2><p>שעות זכאות שטרם שובצו.</p></div>
           </div>
-          <div id="missingList"></div>
+          <div id="missingList" aria-live="polite" aria-label="שעות זכאות שטרם שובצו"></div>
           <section class="load-section">
             <h3>הקצאת שעות הצוות</h3>
-            <div id="teacherLoads"></div>
+            <div id="teacherLoads" aria-live="polite" aria-label="הקצאת שעות הצוות"></div>
           </section>
           <div class="rule-note">
             <strong>בקרת שיבוץ</strong>
             <div id="validationList" class="validation-list"></div>
           </div>
           <div class="side-actions">
-            <button id="manualButton" class="primary-button" type="button">שיבוץ ידני</button>
-            <button id="recalculateButton" class="primary-button" type="button">סידור מערכת</button>
-            <button id="reportButton" class="primary-button" type="button">הפקת דו״ח</button>
+            <p class="workspace-help">אפשר להתחיל ב״סידור מערכת״, לבצע התאמות ידניות לפי הצורך, ולבסוף להפיק דו״ח.</p>
+            <button id="manualButton" class="primary-button" type="button" title="בחירת תלמיד, מורה ומועד באופן ידני">שיבוץ ידני</button>
+            <button id="recalculateButton" class="primary-button" type="button" title="בדיקת אילוצים והשלמת שעות חסרות באופן אוטומטי">סידור מערכת</button>
+            <button id="reportButton" class="primary-button" type="button" title="פתיחת דו״ח שיבוצים להדפסה או לשמירה כקובץ PDF">הפקת דו״ח</button>
             <details class="management-menu">
               <summary>ניהול וכלים</summary>
               <div class="management-actions">
@@ -132,6 +133,7 @@
                 <button id="exportButton" class="secondary-button" type="button">הורדת גיבוי</button>
                 <button id="importButton" class="secondary-button" type="button">שחזור מגיבוי</button>
                 <input id="importFile" type="file" accept=".json,application/json" hidden />
+                <button id="clearBoardButton" class="danger-button" type="button">ניקוי לוח</button>
                 <button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט</button>
                 <button id="resetButton" class="text-button" type="button">שחזור הגרסה הראשונית</button>
               </div>

@@ -167,6 +167,7 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .dismiss-warning { flex: 0 0 auto; padding: 3px 7px; color: #7b5010; background: rgba(255,255,255,.55); border: 1px solid #e2be80; border-radius: 6px; cursor: pointer; font: inherit; font-size: .73rem; font-weight: 700; }
 .dismissed-label { flex: 0 0 auto; padding: 3px 6px; color: #596b80; background: rgba(255,255,255,.56); border-radius: 5px; white-space: nowrap; font-size: .72rem; }
 .side-actions { padding: 0 14px 16px; display: grid; gap: 4px; }
+.workspace-help { margin: 2px 0 6px; padding: 10px 11px; color: #53657b; background: #f1f6fb; border-right: 3px solid #6b9ac7; border-radius: 7px; font-size: .79rem; line-height: 1.5; }
 .swap-launch { border-color: #2d6b68; color: #175d59; background: #edf8f6; }
 .share-launch { border-color: #76529b; color: #623e88; background: #f6f0fb; }
 .management-menu { margin-top: 5px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafc; }
@@ -174,6 +175,7 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .management-menu summary::marker { color: #607894; }
 .management-actions { padding: 0 8px 9px; display: grid; gap: 5px; }
 .management-actions button { width: 100%; }
+.management-actions .danger-button { color: #8a2530; background: #fff8f8; }
 
 .primary-button, .secondary-button, .danger-button, .text-button, .close-button { border-radius: 8px; cursor: pointer; }
 .primary-button { padding: 10px 16px; color: white; background: var(--blue); border: 1px solid var(--blue); font-weight: 700; }

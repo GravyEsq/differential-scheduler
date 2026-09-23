@@ -414,7 +414,8 @@
           const gradeClass = item.grade.startsWith("יא") ? "" : "grade-yod";
           const edgeClass = item.student_slot_type.startsWith("קצה") ? "edge" : "";
           const shared = item.groupId ? " · שיבוץ זוגי" : "";
-          return `<button class="lesson-card ${gradeClass} ${edgeClass} ${item.groupId ? "shared" : ""}" data-assignment-id="${esc(item.id)}" type="button"><strong>${esc(item.student)}</strong><span>${esc(item.teacher)} · ${esc(item.grade)}${shared}</span></button>`;
+          const accessibleLabel = `${item.day}, שעה ${item.period}. ${item.student}, ${item.grade}, אצל ${item.teacher}${item.groupId ? ". שיבוץ זוגי" : ""}. לחצו לעריכה`;
+          return `<button class="lesson-card ${gradeClass} ${edgeClass} ${item.groupId ? "shared" : ""}" data-assignment-id="${esc(item.id)}" type="button" aria-label="${esc(accessibleLabel)}" title="${esc(accessibleLabel)}"><strong>${esc(item.student)}</strong><span>${esc(item.teacher)} · ${esc(item.grade)}${shared}</span></button>`;
         }).join("");
         cells.push(`<div class="grid-cell" role="gridcell" aria-label="${esc(day)}, שעה ${period}">${cards}</div>`);
       });
@@ -2032,6 +2033,20 @@
     showToast("הגרסה הראשונית שוחזרה.");
   }
 
+  function clearBoard() {
+    if (!assignments.length) {
+      showToast("הלוח כבר ריק משיבוצים.");
+      return;
+    }
+    const confirmed = confirm(`לנקות את הלוח מכל ${assignments.length} השיבוצים הקיימים?\n\nנתוני התלמידים, הצוות, הנעילות והאילוצים יישמרו. ניתן יהיה לבטל את הפעולה מיד באמצעות „ביטול פעולה אחרונה”.`);
+    if (!confirmed) return;
+    captureUndo("ניקוי לוח");
+    assignments = [];
+    saveAssignments();
+    renderAll();
+    showToast("הלוח נוקה. נתוני הפרויקט וההגדרות נשמרו.");
+  }
+
   function registerWebMcpTools() {
     const context = document.modelContext;
     if (!context?.registerTool) return;
@@ -2174,6 +2189,7 @@
     if (button) removeConstraint(Number(button.dataset.removeConstraint));
   });
   document.querySelector("#reportButton").addEventListener("click", openDeputyReport);
+  document.querySelector("#clearBoardButton").addEventListener("click", clearBoard);
   document.querySelector("#exportButton").addEventListener("click", exportDraft);
   const importFile = document.querySelector("#importFile");
   document.querySelector("#importButton").addEventListener("click", () => importFile.click());
