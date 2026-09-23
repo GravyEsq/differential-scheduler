@@ -66,6 +66,12 @@
   let saveStateTimer = null;
   let isScheduling = false;
   let dismissedWarnings = loadDismissedWarnings();
+  let pendingSchedulePlan = null;
+  let teacherShadowSchedule = null;
+  let teacherShadowMode = "blocked";
+  let teacherShadowDrawing = false;
+  let teacherShadowPaintedSlots = new Set();
+  let activeTeacherEditorName = null;
 
   const elements = {
     teacherFilter: document.querySelector("#teacherFilter"),
@@ -97,6 +103,7 @@
     addAssignmentButton: document.querySelector("#addAssignmentButton"),
     recalculateDialog: document.querySelector("#recalculateDialog"),
     recalculateSummary: document.querySelector("#recalculateSummary"),
+    applySchedulePlanButton: document.querySelector("#applySchedulePlanButton"),
     swapDialog: document.querySelector("#swapDialog"),
     swapStudentSelect: document.querySelector("#swapStudentSelect"),
     swapShowEdges: document.querySelector("#swapShowEdges"),
@@ -147,6 +154,18 @@
     studentDetailContent: document.querySelector("#studentDetailContent"),
     editStudentFromDetail: document.querySelector("#editStudentFromDetail"),
     settingsDialog: document.querySelector("#settingsDialog"),
+    managementDialog: document.querySelector("#managementDialog"),
+    teamManagerDialog: document.querySelector("#teamManagerDialog"),
+    teamManagerList: document.querySelector("#teamManagerList"),
+    teacherEditorDialog: document.querySelector("#teacherEditorDialog"),
+    teacherEditorMessage: document.querySelector("#teacherEditorMessage"),
+    newTeacherName: document.querySelector("#newTeacherName"),
+    newTeacherPreferredQuota: document.querySelector("#newTeacherPreferredQuota"),
+    newTeacherQuota: document.querySelector("#newTeacherQuota"),
+    newTeacherMaxConsecutive: document.querySelector("#newTeacherMaxConsecutive"),
+    newTeacherGrades: document.querySelector("#newTeacherGrades"),
+    teacherShadowGrid: document.querySelector("#teacherShadowGrid"),
+    teacherShadowSummary: document.querySelector("#teacherShadowSummary"),
     teacherRulesDialog: document.querySelector("#teacherRulesDialog"),
     ruleTeacher: document.querySelector("#ruleTeacher"),
     reviewDialog: document.querySelector("#reviewDialog"),
@@ -440,10 +459,22 @@
     })).filter(student => student.missingNow > 0);
   }
 
+  function missingExplanation(student) {
+    const availability = studentData.get(student.student)?.candidates || [];
+    if (!availability.length) return "לא הוגדרו לתלמיד/ה שעות זמינות במערכת האישית.";
+    const matchingTeacherSlots = availability.filter(slot => [...teacherData.values()].some(teacher => teacherAllows(teacher.name, student.student) && teacher.candidates.some(candidate => candidate.day === slot.day && candidate.period === slot.period)));
+    if (!matchingTeacherSlots.length) return "אין חפיפה בין השעות האפשריות של התלמיד/ה לבין זמינות של מורה מתאימה.";
+    const legal = legalOptionsForStudent(student.student);
+    if (legal.length) return `נמצאו ${legal.length} אפשרויות חוקיות; לחצו על „הוספת שעה” או על „סידור מערכת” כדי לבחור ביניהן.`;
+    const withQuotaException = legalOptionsForStudent(student.student, null, { includeOverQuota: true });
+    if (withQuotaException.length) return "יש חפיפה בשעות, אך כל האפשרויות חורגות מהמכסה שהוגדרה למורות.";
+    return "קיימת חפיפת שעות, אך כל האפשרויות נחסמות כרגע בגלל שיבוצים קיימים, נעילות או אילוצי רצף.";
+  }
+
   function renderSidebar() {
     const missing = missingStudents();
     elements.missingList.innerHTML = missing.length
-      ? missing.map(student => `<article class="missing-card"><strong>${esc(student.student)}</strong><span>${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}</span><button class="secondary-button missing-action" data-add-student="${esc(student.student)}" type="button">הוספת שעה</button></article>`).join("")
+      ? missing.map(student => `<article class="missing-card"><strong>${esc(student.student)}</strong><span>${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}</span><small class="missing-explanation">${esc(missingExplanation(student))}</small><button class="secondary-button missing-action" data-add-student="${esc(student.student)}" type="button">הוספת שעה</button></article>`).join("")
       : `<article class="missing-card"><strong>הכול משובץ</strong><span>לא נותרו שעות ללא מענה.</span></article>`;
 
     const { byTeacher } = assignmentCounts();
@@ -639,7 +670,7 @@
         ? `<span class="schedule-ready">מערכת שעות נקלטה</span>`
         : `<span class="schedule-missing">נדרשת העלאת מערכת שעות</span>`;
       const exceptionLabels = [record.exceptions?.allowOtherLessons ? "אפשר שיבוץ על חשבון שיעור" : "", record.exceptions?.noPeriodZero ? "ללא שעה 0" : ""].filter(Boolean);
-      return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}${exceptionLabels.length ? ` · ${esc(exceptionLabels.join(" · "))}` : ""}</p></div><div class="registry-actions"><button class="primary-button" data-view-registry="${esc(record.id)}" type="button">פתיחת כרטיס</button><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button></div></article>`;
+      return `<article class="registry-card"><div><div class="registry-name"><h3>${esc(record.fullName)}</h3><span>${esc(record.grade)}</span></div><div class="basket-chips">${chips || "<span class='basket-chip'>טרם הוגדר סל אישי</span>"}</div><p>${scheduleText}${record.shareWilling ? " · ניתן להציע שיבוץ זוגי" : ""}${exceptionLabels.length ? ` · ${esc(exceptionLabels.join(" · "))}` : ""}</p></div><div class="registry-actions"><button class="primary-button" data-view-registry="${esc(record.id)}" type="button">פתיחת כרטיס</button><button class="secondary-button" data-edit-registry="${esc(record.id)}" type="button">עריכת פרטים</button><button class="text-button" data-delete-registry="${esc(record.id)}" type="button">הסרה</button></div></article>`;
     }).join("");
     elements.registryView.innerHTML = `<section class="registry-view"><div class="registry-view-head"><p>ריכוז זכאויות, מערכות שעות ומצב המענה בכל המקצועות.</p><button class="primary-button" data-new-registry type="button">קליטת תלמיד/ה</button></div><div class="registry-list">${cards || "<div class='registry-empty'><strong>המאגר עדיין ריק.</strong><p>אפשר לקלוט תלמיד או תלמידה ולהעלות את מערכת השעות שלהם.</p></div>"}</div></section>`;
   }
@@ -1209,23 +1240,24 @@
     return [...repairs.values()];
   }
 
-  function showRecalculationResult({ added, repaired, remaining, searchStopped }) {
+  function showSchedulePreview({ additions, repaired, remaining, searchStopped }) {
     const repairedText = repaired.length
-      ? `<p><strong>${repaired.length === 1 ? "שיבוץ לא חוקי אחד שוחרר" : `${repaired.length} שיבוצים לא חוקיים שוחררו`} לצורך תיקון.</strong></p><ul>${repaired.map(({ item, reasons }) => `<li><strong>${esc(item.student)}</strong> — ${esc([...reasons].join("; "))}</li>`).join("")}</ul>`
+      ? `<section class="plan-section"><h3>${repaired.length === 1 ? "שיבוץ אחד ישתחרר" : `${repaired.length} שיבוצים ישתחררו`} כי הם סותרים אילוץ</h3><ul>${repaired.map(({ item, reasons }) => `<li><strong>${esc(item.student)}</strong> · ${esc(item.day)}, שעה ${item.period}, אצל ${esc(item.teacher)} — ${esc([...reasons].join("; "))}</li>`).join("")}</ul></section>`
       : "";
-    const addedText = added
-      ? `<p><strong>נוצרו ${added === 1 ? "שיבוץ אחד חדש" : `${added} שיבוצים חדשים`}.</strong></p>`
+    const addedText = additions.length
+      ? `<section class="plan-section"><h3>${additions.length === 1 ? "שיבוץ חדש אחד יתווסף" : `${additions.length} שיבוצים חדשים יתווספו`}</h3><ul>${additions.map(item => `<li><strong>${esc(item.student)}</strong> · ${esc(item.day)}, שעה ${item.period} · אצל ${esc(item.teacher)}${item.student_slot_type === "שיעור במקצוע" ? " · בזמן שיעור המקצוע" : ""}</li>`).join("")}</ul></section>`
       : "";
-    const unchangedText = !added && !repaired.length
-      ? "<p><strong>לא נמצאו חוסרים או שיבוצים שסותרים אילוץ פעיל.</strong></p>"
+    const unchangedText = !additions.length && !repaired.length
+      ? "<p><strong>לא נמצאו שינויים שאפשר לבצע אוטומטית.</strong></p>"
       : "";
     const remainingText = remaining.length
-      ? `<p><strong>${searchStopped ? "לא נמצאה בחיפוש שבוצע" : "לא נמצאה"} חלופה חוקית עבור השעות הבאות:</strong></p><ul>${remaining.map(student => `<li><strong>${esc(student.student)}</strong> — ${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}</li>`).join("")}</ul>`
-      : "<p><strong>כל שעות הזכאות משובצות כעת.</strong></p>";
+      ? `<section class="plan-section remaining"><h3>${searchStopped ? "לא נמצאה בחיפוש שבוצע" : "לא נמצאה"} חלופה חוקית לשעות הבאות</h3><ul>${remaining.map(student => `<li><strong>${esc(student.student)}</strong> — ${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}<small>${esc(missingExplanation(student))}</small></li>`).join("")}</ul></section>`
+      : "<p class=\"plan-success\"><strong>לאחר ההחלה, כל שעות הזכאות יהיו משובצות.</strong></p>";
     const stoppedText = searchStopped
       ? "<p>נבדקו חלופות רבות, והחיפוש הופסק כדי לא לעכב את העבודה. אפשר לנסות שוב לאחר שינוי באילוצים או בשיבוצים.</p>"
       : "";
-    elements.recalculateSummary.innerHTML = `${repairedText}${addedText}${unchangedText}${remainingText}${stoppedText}`;
+    elements.recalculateSummary.innerHTML = `<p class="plan-intro">בדקו את השינויים לפני ההחלה. שום דבר עדיין לא שונה במערכת.</p>${repairedText}${addedText}${unchangedText}${remainingText}${stoppedText}`;
+    elements.applySchedulePlanButton.hidden = !additions.length && !repaired.length;
     elements.recalculateDialog.showModal();
   }
 
@@ -1236,12 +1268,7 @@
     elements.nextActionButton.disabled = busy;
   }
 
-  async function recalculateMissingAssignments() {
-    if (isScheduling) return;
-    isScheduling = true;
-    setSchedulingBusy(true);
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-    try {
+  function buildSchedulePlan() {
     const originalAssignments = assignments;
     const repaired = assignmentsToRepair();
     const repairedIds = new Set(repaired.map(({ item }) => item.id));
@@ -1251,15 +1278,10 @@
     const totalMissing = initialMissing.reduce((sum, item) => sum + item.missingNow, 0);
     if (!totalMissing) {
       assignments = originalAssignments;
-      if (repaired.length) {
-        captureUndo("סידור מערכת");
-        assignments = fixedAssignments;
-        saveAssignments();
-        renderAll();
-        showToast("השיבוצים שסתרו אילוץ פעיל שוחררו.");
-      }
-      showRecalculationResult({ added: 0, repaired, remaining: missingStudents(), searchStopped: false });
-      return;
+      assignments = fixedAssignments;
+      const remaining = missingStudents();
+      assignments = originalAssignments;
+      return { originalAssignments, finalAssignments: fixedAssignments, additions: [], repaired, remaining, searchStopped: false };
     }
 
     const requirements = initialMissing.flatMap(student => Array.from({ length: student.missingNow }, () => student.student));
@@ -1311,18 +1333,36 @@
     search(requirements);
     const finalAssignments = fixedAssignments.concat(bestAdditions);
     assignments = originalAssignments;
-    if (repaired.length || bestAdditions.length) {
-      captureUndo("סידור מערכת");
-      assignments = finalAssignments;
-      saveAssignments();
-      renderAll();
-      showToast(repaired.length ? "השיבוצים נבדקו ותוקנו לפי האילוצים הפעילים." : `הושלמו ${bestAdditions.length} שעות חסרות.`);
-    }
-    showRecalculationResult({ added: bestAdditions.length, repaired, remaining: missingStudents(), searchStopped });
+    assignments = finalAssignments;
+    const remaining = missingStudents();
+    assignments = originalAssignments;
+    return { originalAssignments, finalAssignments, additions: bestAdditions, repaired, remaining, searchStopped };
+  }
+
+  async function recalculateMissingAssignments() {
+    if (isScheduling) return;
+    isScheduling = true;
+    setSchedulingBusy(true);
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    try {
+      pendingSchedulePlan = buildSchedulePlan();
+      showSchedulePreview(pendingSchedulePlan);
     } finally {
       isScheduling = false;
       setSchedulingBusy(false);
     }
+  }
+
+  function applySchedulePlan() {
+    const plan = pendingSchedulePlan;
+    if (!plan || (!plan.additions.length && !plan.repaired.length)) return;
+    captureUndo("סידור מערכת");
+    assignments = plan.finalAssignments;
+    saveAssignments();
+    pendingSchedulePlan = null;
+    elements.recalculateDialog.close();
+    renderAll();
+    showToast("השינויים שאישרת הוחלו על המערכת.");
   }
 
   function deleteAssignment() {
@@ -1700,6 +1740,169 @@
     renderShadowSchedule();
   }
 
+  function refreshTeacherFilter() {
+    const selected = elements.teacherFilter.value;
+    const names = draft.teachers.map(item => item.teacher).sort((a, b) => a.localeCompare(b, "he"));
+    elements.teacherFilter.innerHTML = `<option value="all">כל הצוות</option>${names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}`;
+    elements.teacherFilter.value = names.includes(selected) ? selected : "all";
+  }
+
+  function openManagementDialog() {
+    elements.managementDialog.showModal();
+  }
+
+  function closeManagementDialog() {
+    elements.managementDialog.close();
+  }
+
+  function openTeamManager() {
+    renderTeamManager();
+    elements.teamManagerDialog.showModal();
+  }
+
+  function renderTeamManager() {
+    const { byTeacher } = assignmentCounts();
+    const rows = draft.teachers.slice().sort((a, b) => a.teacher.localeCompare(b.teacher, "he")).map(teacher => {
+      const source = teacherData.get(teacher.teacher);
+      const used = byTeacher.get(teacher.teacher) || 0;
+      const flexible = source?.candidates?.filter(item => item.category === "שעה גמישה" || item.category === "שעה פיקטיבית").length || 0;
+      const available = source?.candidates?.length || 0;
+      return `<article class="team-manager-card"><div><h3>${esc(teacher.teacher)}</h3><p>${used}/${teacher.quota} שעות משובצות · ${available} שעות זמינות${flexible ? ` · ${flexible} גמישות` : ""}</p><small>${(source?.allowed_student_grades || []).length ? `שכבות: ${esc(source.allowed_student_grades.join(", "))}` : "כל השכבות"}</small></div><div><button class="secondary-button" data-edit-team-teacher="${esc(teacher.teacher)}" type="button">עריכת מורה</button><button class="text-button" data-rules-team-teacher="${esc(teacher.teacher)}" type="button">מדיניות מתקדמת</button><button class="text-button" data-remove-team-teacher="${esc(teacher.teacher)}" type="button">הסרה</button></div></article>`;
+    }).join("");
+    elements.teamManagerList.innerHTML = rows || `<div class="registry-empty"><strong>עדיין אין צוות בפרויקט.</strong><p>אפשר להוסיף מורה באמצעות מערכת הצל.</p></div>`;
+  }
+
+  function resetTeacherShadowEditor(source = null) {
+    teacherShadowSchedule = {};
+    days.forEach(day => {
+      for (let period = 0; period <= 9; period += 1) teacherShadowSchedule[shadowSlotKey(day, period)] = source ? "blocked" : "free";
+    });
+    (source?.candidates || []).forEach(slot => {
+      if (days.includes(slot.day) && Number.isInteger(slot.period)) teacherShadowSchedule[shadowSlotKey(slot.day, slot.period)] = slot.category === "שעה גמישה" || slot.category === "שעה פיקטיבית" ? "flexible" : "free";
+    });
+    (source?.base_commitments || []).forEach(slot => {
+      if (days.includes(slot.day) && Number.isInteger(slot.period)) teacherShadowSchedule[shadowSlotKey(slot.day, slot.period)] = "fixed";
+    });
+    teacherShadowMode = "blocked";
+    teacherShadowDrawing = false;
+    renderTeacherShadowEditor();
+  }
+
+  function renderTeacherShadowEditor() {
+    if (!teacherShadowSchedule) return;
+    const cells = [`<div class="shadow-grid-head">שעה</div>`, ...days.map(day => `<div class="shadow-grid-head">${esc(day)}</div>`)];
+    for (let period = 0; period <= 9; period += 1) {
+      cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(times[period])}</small></div>`);
+      days.forEach(day => {
+        const state = teacherShadowSchedule[shadowSlotKey(day, period)] || "free";
+        const label = state === "blocked" ? "חסום" : state === "fixed" ? "שיעור קבוע" : state === "flexible" ? "שעה גמישה" : "פנויה";
+        cells.push(`<button class="shadow-cell teacher-${state}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${state === "fixed" ? "קבוע" : state === "flexible" ? "גמיש" : state === "blocked" ? "חסום" : ""}</span></button>`);
+      });
+    }
+    elements.teacherShadowGrid.innerHTML = cells.join("");
+    elements.teacherEditorDialog.querySelectorAll("[data-teacher-shadow-mode]").forEach(button => button.classList.toggle("active", button.dataset.teacherShadowMode === teacherShadowMode));
+    const values = Object.values(teacherShadowSchedule);
+    const count = state => values.filter(value => value === state).length;
+    elements.teacherShadowSummary.textContent = `${count("blocked")} חסומות · ${count("fixed")} קבועות · ${count("flexible")} גמישות`;
+  }
+
+  function paintTeacherShadowSlot(button) {
+    if (!button || !teacherShadowSchedule) return;
+    const day = button.dataset.teacherShadowDay;
+    const period = Number(button.dataset.teacherShadowPeriod);
+    if (!days.includes(day) || !Number.isInteger(period)) return;
+    const key = shadowSlotKey(day, period);
+    if (teacherShadowPaintedSlots.has(key)) return;
+    teacherShadowPaintedSlots.add(key);
+    const next = teacherShadowMode === "erase" ? "free" : teacherShadowMode;
+    if (teacherShadowSchedule[key] === next) return;
+    teacherShadowSchedule[key] = next;
+    renderTeacherShadowEditor();
+  }
+
+  function openTeacherEditor(existingName = null) {
+    activeTeacherEditorName = existingName;
+    const source = existingName ? teacherData.get(existingName) : null;
+    const summary = existingName ? draft.teachers.find(item => item.teacher === existingName) : null;
+    elements.teacherEditorMessage.textContent = "";
+    elements.teacherEditorDialog.querySelector("h2").textContent = source ? `עריכת ${existingName}` : "הוספת מורה";
+    document.querySelector("#saveNewTeacherButton").textContent = source ? "שמירת שינויים" : "הוספת המורה לצוות";
+    elements.newTeacherName.value = existingName || "";
+    elements.newTeacherName.readOnly = Boolean(source);
+    elements.newTeacherPreferredQuota.value = summary?.preferred_quota ?? source?.preferred_quota ?? "1";
+    elements.newTeacherQuota.value = summary?.assignment_limit ?? summary?.quota ?? source?.quota ?? "2";
+    elements.newTeacherMaxConsecutive.value = source?.max_consecutive ?? "7";
+    elements.newTeacherGrades.value = (source?.allowed_student_grades || []).join(", ");
+    resetTeacherShadowEditor(source);
+    elements.teacherEditorDialog.showModal();
+    elements.newTeacherName.focus();
+  }
+
+  function saveNewTeacher() {
+    const name = elements.newTeacherName.value.trim();
+    const preferred = Number(elements.newTeacherPreferredQuota.value);
+    const quota = Number(elements.newTeacherQuota.value);
+    const maxConsecutive = Number(elements.newTeacherMaxConsecutive.value);
+    const allowedGrades = parseList(elements.newTeacherGrades.value);
+    if (!name) { elements.teacherEditorMessage.textContent = "יש להזין שם מלא."; return; }
+    if (teacherData.has(name) && name !== activeTeacherEditorName) { elements.teacherEditorMessage.textContent = "מורה בשם זה כבר קיימת בצוות."; return; }
+    if (!Number.isInteger(preferred) || preferred < 0 || !Number.isInteger(quota) || quota <= 0 || preferred > quota) { elements.teacherEditorMessage.textContent = "יש להזין יעד מועדף ומכסה מרבית תקינים."; return; }
+    if (!Number.isInteger(maxConsecutive) || maxConsecutive < 1 || maxConsecutive > 7) { elements.teacherEditorMessage.textContent = "מספר השעות הרצופות חייב להיות בין 1 ל־7."; return; }
+    const candidates = [];
+    const baseCommitments = [];
+    days.forEach(day => {
+      for (let period = 0; period <= (projectMeta.lastPeriod ?? 9); period += 1) {
+        const state = teacherShadowSchedule?.[shadowSlotKey(day, period)] || "free";
+        if (state === "fixed") baseCommitments.push({ day, period });
+        if (state !== "free" && state !== "flexible") continue;
+        const category = state === "flexible" ? "שעה גמישה" : "פנויה";
+        candidates.push({ day, period, start: times[period], end: times[period + 1] || "", category, replaces: category === "שעה גמישה" ? "התחייבות גמישה" : null, avoid_if_possible: (projectMeta.avoidPeriods || []).includes(period) });
+      }
+    });
+    if (!candidates.length) { elements.teacherEditorMessage.textContent = "לא נותרה אף שעה פנויה או גמישה למורה."; return; }
+    const source = { ...(teacherData.get(name) || {}), name, quota, preferred_quota: preferred, allowed_student_grades: allowedGrades.length ? allowedGrades : null, preferred_student_grades: teacherData.get(name)?.preferred_student_grades || [], forbidden_periods: teacherData.get(name)?.forbidden_periods || [], max_consecutive: maxConsecutive, base_commitments: baseCommitments, candidates };
+    const summary = draft.teachers.find(item => item.teacher === name);
+    if (summary) Object.assign(summary, { quota, preferred_quota: preferred, assignment_limit: quota });
+    else draft.teachers.push({ teacher: name, quota, preferred_quota: preferred, assignment_limit: quota, assigned: 0, remaining: quota });
+    teacherData.set(name, source);
+    quotas.set(name, preferred);
+    assignmentLimits.set(name, quota);
+    payload.schedule = draft;
+    payload.teacherAvailability.teachers = [...teacherData.values()];
+    if (safeLocalSet(activeProjectKey, JSON.stringify(payload))) markSaved();
+    refreshTeacherFilter();
+    elements.teacherEditorDialog.close();
+    renderTeamManager();
+    renderAll();
+    showToast(activeTeacherEditorName ? `הגדרות ${name} עודכנו.` : `${name} נוספה לצוות.`);
+  }
+
+  function removeTeamTeacher(name) {
+    const linked = assignments.filter(item => item.teacher === name);
+    const note = linked.length ? ` למורה יש ${linked.length} שיבוצים שיימחקו מהלוח.` : "";
+    if (!confirm(`להסיר את ${name} מהצוות?${note}`)) return;
+    assignments = assignments.filter(item => item.teacher !== name);
+    for (let index = originalAssignments.length - 1; index >= 0; index -= 1) {
+      if (originalAssignments[index].teacher === name) originalAssignments.splice(index, 1);
+    }
+    draft.teachers = draft.teachers.filter(item => item.teacher !== name);
+    teacherData.delete(name);
+    quotas.delete(name);
+    assignmentLimits.delete(name);
+    Object.entries(activeLocks).forEach(([student, teacher]) => { if (teacher === name) delete activeLocks[student]; });
+    activeConstraints = activeConstraints.filter(item => !(item.type === "teacher" && item.name === name));
+    payload.schedule = draft;
+    payload.teacherAvailability.teachers = [...teacherData.values()];
+    safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    saveAssignments();
+    saveLocks();
+    saveConstraints();
+    refreshTeacherFilter();
+    renderTeamManager();
+    renderAll();
+    showToast(`${name} הוסרה מהצוות.`);
+  }
+
   function availabilityFromRegistry(record, request) {
     const timetable = record.schedule?.timetable || [];
     const subjectTerms = [request.subject, projectMeta.subject, ...(projectMeta.aliases || [])]
@@ -1841,6 +2044,36 @@
     }
   }
 
+  function deleteRegistryStudent(recordId) {
+    const record = studentRegistry.find(item => item.id === recordId);
+    if (!record) return;
+    const projectStudent = draft.students.find(item => item.student === record.fullName);
+    const assignmentCount = assignments.filter(item => item.student === record.fullName).length;
+    const projectNote = projectStudent ? ` התלמיד/ה יוסר/תוסר גם מהפרויקט${assignmentCount ? ` ומערכת השעות תסיר ${assignmentCount} שיבוצים` : ""}.` : "";
+    if (!confirm(`להסיר את ${record.fullName} ממאגר התלמידים?${projectNote}`)) return;
+    studentRegistry = studentRegistry.filter(item => item.id !== recordId);
+    if (projectStudent) {
+      assignments = assignments.filter(item => item.student !== record.fullName);
+      for (let index = originalAssignments.length - 1; index >= 0; index -= 1) {
+        if (originalAssignments[index].student === record.fullName) originalAssignments.splice(index, 1);
+      }
+      draft.students = draft.students.filter(item => item.student !== record.fullName);
+      payload.studentAvailability.students = payload.studentAvailability.students.filter(item => item.student !== record.fullName);
+      studentData.delete(record.fullName);
+      delete activeLocks[record.fullName];
+      delete defaultLocks[record.fullName];
+      delete shareWilling[record.fullName];
+    }
+    payload.schedule = draft;
+    safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    saveAssignments();
+    saveLocks();
+    saveShareWilling();
+    saveStudentRegistry();
+    renderAll();
+    showToast(`${record.fullName} הוסר/ה מהמאגר${projectStudent ? " ומהפרויקט" : ""}.`);
+  }
+
   function openStudentDetail(recordId) {
     const record = studentRegistry.find(item => item.id === recordId);
     if (!record) return;
@@ -1932,8 +2165,8 @@
     document.querySelector("#rulePreferredGrades").value = preferredGrades.join(", ");
   }
 
-  function openTeacherRulesDialog() {
-    const current = elements.ruleTeacher.value;
+  function openTeacherRulesDialog(requestedTeacher = null) {
+    const current = requestedTeacher || elements.ruleTeacher.value;
     const names = draft.teachers.map(item => item.teacher).sort((a, b) => a.localeCompare(b, "he"));
     elements.ruleTeacher.innerHTML = names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
     if (names.includes(current)) elements.ruleTeacher.value = current;
@@ -2196,12 +2429,7 @@
     });
   }
 
-  draft.teachers.forEach(({ teacher }) => {
-    const option = document.createElement("option");
-    option.value = teacher;
-    option.textContent = teacher;
-    elements.teacherFilter.append(option);
-  });
+  refreshTeacherFilter();
 
   const isEmptyProject = draft.students.length === 0 && draft.teachers.length === 0;
   document.querySelector("#projectEyebrow").textContent = isEmptyProject ? "מערכת שיבוצים דיפרנציאליים" : `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
@@ -2252,6 +2480,11 @@
       openRegistryDialog(editRegistryTarget.dataset.editRegistry);
       return;
     }
+    const deleteRegistryTarget = event.target.closest("[data-delete-registry]");
+    if (deleteRegistryTarget) {
+      deleteRegistryStudent(deleteRegistryTarget.dataset.deleteRegistry);
+      return;
+    }
     const viewRegistryTarget = event.target.closest("[data-view-registry]");
     if (viewRegistryTarget) {
       openStudentDetail(viewRegistryTarget.dataset.viewRegistry);
@@ -2270,28 +2503,71 @@
   elements.alternativeSelect.addEventListener("change", updateDialogOptionNote);
   document.querySelector("#manualButton").addEventListener("click", () => openAddDialog());
   document.querySelector("#recalculateButton").addEventListener("click", recalculateMissingAssignments);
+  elements.applySchedulePlanButton.addEventListener("click", applySchedulePlan);
   elements.addStudentSelect.addEventListener("change", refreshAddDialog);
   elements.addOptionSelect.addEventListener("change", updateAddDialogNote);
   elements.addAssignmentButton.addEventListener("click", addAssignment);
-  document.querySelector("#swapButton").addEventListener("click", openSwapDialog);
+  document.querySelector("#managementMenuButton").addEventListener("click", openManagementDialog);
+  document.querySelector("#closeManagementButton").addEventListener("click", closeManagementDialog);
+  elements.managementDialog.addEventListener("click", event => {
+    if (event.target === elements.managementDialog || event.target.closest("[data-close-management]")) closeManagementDialog();
+    const action = event.target.closest("[data-management-action]")?.dataset.managementAction;
+    if (!action) return;
+    if (action === "team") { closeManagementDialog(); openTeamManager(); }
+    if (action === "students") { closeManagementDialog(); activateViewTab(document.querySelector("#registryTab")); }
+    if (action === "settings") { closeManagementDialog(); openSettingsDialog(); }
+    if (action === "constraints") { closeManagementDialog(); openConstraintsDialog(); }
+    if (action === "locks") { closeManagementDialog(); openLocksDialog(); }
+    if (action === "swaps") { closeManagementDialog(); openSwapDialog(); }
+    if (action === "share") { closeManagementDialog(); openShareDialog(); }
+    if (action === "backup") { exportDraft(); }
+    if (action === "restore") { closeManagementDialog(); document.querySelector("#importFile").click(); }
+    if (action === "clear") { closeManagementDialog(); clearBoard(); }
+    if (action === "reset") { closeManagementDialog(); resetLocalChanges(); }
+  });
+  document.querySelector("#openTeacherEditorButton").addEventListener("click", openTeacherEditor);
+  document.querySelector("#saveNewTeacherButton").addEventListener("click", saveNewTeacher);
+  elements.teamManagerList.addEventListener("click", event => {
+    const teacherName = event.target.closest("[data-edit-team-teacher]")?.dataset.editTeamTeacher;
+    if (teacherName) { elements.teamManagerDialog.close(); openTeacherEditor(teacherName); }
+    const rulesName = event.target.closest("[data-rules-team-teacher]")?.dataset.rulesTeamTeacher;
+    if (rulesName) { elements.teamManagerDialog.close(); openTeacherRulesDialog(rulesName); }
+    const removeName = event.target.closest("[data-remove-team-teacher]")?.dataset.removeTeamTeacher;
+    if (removeName) removeTeamTeacher(removeName);
+  });
+  elements.teacherEditorDialog.addEventListener("click", event => {
+    const tool = event.target.closest("[data-teacher-shadow-mode]");
+    if (tool) { teacherShadowMode = tool.dataset.teacherShadowMode; renderTeacherShadowEditor(); }
+  });
+  elements.teacherShadowGrid.addEventListener("pointerdown", event => {
+    const cell = event.target.closest("[data-teacher-shadow-day]");
+    if (!cell) return;
+    event.preventDefault();
+    teacherShadowDrawing = true;
+    teacherShadowPaintedSlots = new Set();
+    paintTeacherShadowSlot(cell);
+  });
+  elements.teacherShadowGrid.addEventListener("pointermove", event => {
+    if (!teacherShadowDrawing) return;
+    const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-teacher-shadow-day]");
+    paintTeacherShadowSlot(cell);
+  });
+  document.addEventListener("pointerup", () => { teacherShadowDrawing = false; teacherShadowPaintedSlots = new Set(); });
+  document.addEventListener("pointercancel", () => { teacherShadowDrawing = false; teacherShadowPaintedSlots = new Set(); });
   elements.swapStudentSelect.addEventListener("change", renderSwapSuggestions);
   elements.swapShowEdges.addEventListener("change", renderSwapSuggestions);
   elements.swapSuggestions.addEventListener("click", event => {
     const button = event.target.closest("[data-swap-index]");
     if (button) applySwap(elements.swapSuggestions._items?.[Number(button.dataset.swapIndex)]);
   });
-  document.querySelector("#locksButton").addEventListener("click", openLocksDialog);
   document.querySelector("#saveLocksButton").addEventListener("click", commitLocks);
-  document.querySelector("#teacherRulesButton").addEventListener("click", openTeacherRulesDialog);
   elements.ruleTeacher.addEventListener("change", refreshTeacherRules);
   document.querySelector("#saveTeacherRulesButton").addEventListener("click", saveTeacherRules);
-  document.querySelector("#shareButton").addEventListener("click", openShareDialog);
   document.querySelector("#saveShareWillingButton").addEventListener("click", commitShareWilling);
   elements.shareSuggestions.addEventListener("click", event => {
     const button = event.target.closest("[data-share-index]");
     if (button) applyShareSuggestion(elements.shareSuggestions._items?.[Number(button.dataset.shareIndex)]);
   });
-  document.querySelector("#constraintsButton").addEventListener("click", openConstraintsDialog);
   elements.constraintType.addEventListener("change", refreshConstraintPeople);
   document.querySelector("#addConstraintButton").addEventListener("click", addConstraint);
   elements.constraintsList.addEventListener("click", event => {
@@ -2299,17 +2575,13 @@
     if (button) removeConstraint(Number(button.dataset.removeConstraint));
   });
   document.querySelector("#reportButton").addEventListener("click", openDeputyReport);
-  document.querySelector("#clearBoardButton").addEventListener("click", clearBoard);
-  document.querySelector("#exportButton").addEventListener("click", exportDraft);
   const importFile = document.querySelector("#importFile");
-  document.querySelector("#importButton").addEventListener("click", () => importFile.click());
   document.querySelector("#emptyImportButton").addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", async () => {
     const [file] = importFile.files;
     if (file) await importDraft(file);
     importFile.value = "";
   });
-  document.querySelector("#resetButton").addEventListener("click", resetLocalChanges);
   elements.undoButton.addEventListener("click", undoLastAction);
   elements.nextActionButton.addEventListener("click", handleNextAction);
   elements.reviewWarningsButton.addEventListener("click", openReviewDialog);
@@ -2368,7 +2640,6 @@
     elements.studentDetailDialog.close();
     openRegistryDialog(detailStudentId);
   });
-  document.querySelector("#settingsButton").addEventListener("click", openSettingsDialog);
   document.querySelector("#saveSettingsButton").addEventListener("click", saveProjectSettings);
   document.querySelector("#privacyButton").addEventListener("click", () => { updateBackupMessage(); elements.privacyDialog.showModal(); });
   document.querySelector("#privacyBackupButton").addEventListener("click", exportDraft);

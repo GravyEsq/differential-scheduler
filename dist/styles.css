@@ -192,12 +192,21 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .side-section summary small.error { color: #8a2530; background: #fdecef; }
 .swap-launch { border-color: #2d6b68; color: #175d59; background: #edf8f6; }
 .share-launch { border-color: #76529b; color: #623e88; background: #f6f0fb; }
-.management-menu { margin-top: 5px; border: 1px solid #dfd6ee; border-radius: 11px; background: #faf8ff; }
-.management-menu summary { min-height: 42px; padding: 10px 12px; color: var(--navy); cursor: pointer; font-weight: 700; }
-.management-menu summary::marker { color: #607894; }
-.management-actions { padding: 0 8px 9px; display: grid; gap: 5px; }
-.management-actions button { width: 100%; }
-.management-actions .danger-button { color: #8a2530; background: #fff8f8; }
+.management-launch { width: 100%; min-height: 48px; border-color: #c8b7e8; background: linear-gradient(120deg, #f7f1ff, #f0fffb); font-size: .92rem; }
+.management-dialog { width: min(900px, calc(100vw - 32px)); max-height: min(780px, calc(100vh - 32px)); padding: 0; overflow: auto; border: 0; border-radius: 24px; box-shadow: 0 30px 100px rgba(37,24,71,.42); }
+.management-dialog::backdrop { background: rgba(32,22,57,.94); }
+.management-shell { padding: 24px; background: linear-gradient(145deg, #fff, #faf8ff 58%, #f2fffb); }
+.management-shell .dialog-head { padding: 0 0 20px; }
+.management-shell .dialog-head p { margin: 6px 0 0; color: var(--muted); }
+.management-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.management-tile { min-height: 130px; padding: 17px; display: grid; grid-template-columns: 42px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 11px; text-align: right; color: var(--ink); background: rgba(255,255,255,.88); border: 1px solid #e0d6ef; border-radius: 16px; cursor: pointer; transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
+.management-tile:hover, .management-tile:focus-visible { transform: translateY(-2px); border-color: #9a83d1; box-shadow: 0 10px 24px rgba(87,60,141,.14); }
+.management-tile i { width: 40px; height: 40px; grid-row: 1 / 3; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #7358cc, #376d9f); border-radius: 12px; font-style: normal; font-size: 1.2rem; }
+.management-tile strong { align-self: end; color: var(--navy); font-size: .95rem; }
+.management-tile span { align-self: start; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+.management-tile.danger i { background: linear-gradient(135deg, #b34a57, #d07648); }
+.management-tile.danger strong { color: #8f3340; }
+.management-tile.muted i { background: linear-gradient(135deg, #78859b, #52657d); }
 
 .primary-button, .secondary-button, .danger-button, .text-button, .close-button { border-radius: 10px; cursor: pointer; transition: transform .14s ease, box-shadow .14s ease, background .14s ease; }
 .primary-button { padding: 10px 16px; color: white; background: linear-gradient(135deg, #6245d0, #8167e7); border: 1px solid #6245d0; box-shadow: 0 6px 14px rgba(92,66,199,.24); font-weight: 750; }
@@ -226,6 +235,24 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .teacher-card strong { color: var(--navy); }
 .teacher-card ul { margin: 13px 0 0; padding: 0; list-style: none; }
 .teacher-card li { padding: 7px 0; border-top: 1px solid #e8edf4; color: #53627a; font-size: .82rem; }
+.team-manager-dialog { width: min(720px, calc(100vw - 28px)); }
+.team-manager-list { padding: 6px 22px 20px; display: grid; gap: 10px; }
+.team-manager-card { padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #e4dcef; border-radius: 13px; background: linear-gradient(105deg, #fff, #fbfaff); }
+.team-manager-card h3 { margin: 0 0 4px; color: var(--navy); font-size: .97rem; }
+.team-manager-card p, .team-manager-card small { margin: 0; color: var(--muted); font-size: .78rem; }
+.team-manager-card small { display: block; margin-top: 5px; }
+.team-manager-card > div:last-child { display: flex; align-items: center; gap: 8px; }
+.teacher-editor-dialog { width: min(760px, calc(100vw - 28px)); }
+.teacher-editor-dialog .shadow-schedule-editor { margin: 0 22px 18px; }
+.missing-explanation { display: block; margin: 7px 0 10px; color: #5e5573; font-size: .75rem; line-height: 1.45; }
+.plan-intro { margin: 0 0 14px; padding: 11px; color: #453a58; background: #f4f0fc; border-radius: 10px; font-size: .83rem; }
+.plan-section { margin: 12px 0; padding: 12px; border: 1px solid #e5dcef; border-radius: 11px; background: #fcfbff; }
+.plan-section h3 { margin: 0 0 8px; color: var(--navy); font-size: .9rem; }
+.plan-section ul { margin: 0; padding-right: 19px; color: #554d64; font-size: .81rem; line-height: 1.55; }
+.plan-section li + li { margin-top: 5px; }
+.plan-section li small { display: block; margin-top: 2px; color: var(--muted); }
+.plan-section.remaining { border-color: #edc98d; background: #fffaf0; }
+.plan-success { margin: 12px 0; padding: 11px; color: #14665d; background: #eefffa; border-radius: 10px; }
 .empty-filter { padding: 50px 20px; text-align: center; color: var(--muted); }
 
 .edit-dialog { width: min(560px, calc(100vw - 28px)); padding: 0; border: 0; border-radius: 20px; box-shadow: 0 28px 90px rgba(48,31,94,.34); }
@@ -469,6 +496,12 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
   .detail-summary, .settings-form { grid-template-columns: 1fr; }
   .request-row { grid-template-columns: 1fr 90px; }
   .request-row .icon-button { grid-column: 1 / -1; }
+  .management-shell { padding: 18px; }
+  .management-grid { grid-template-columns: 1fr; }
+  .management-tile { min-height: 100px; }
+  .team-manager-card { align-items: stretch; flex-direction: column; }
+  .team-manager-card > div:last-child { width: 100%; }
+  .team-manager-card > div:last-child button { flex: 1; }
 }
 
 /* Project setup */
