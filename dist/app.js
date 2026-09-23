@@ -164,6 +164,7 @@
     newTeacherQuota: document.querySelector("#newTeacherQuota"),
     newTeacherMaxConsecutive: document.querySelector("#newTeacherMaxConsecutive"),
     newTeacherGrades: document.querySelector("#newTeacherGrades"),
+    newTeacherPreferredGrades: document.querySelector("#newTeacherPreferredGrades"),
     teacherShadowGrid: document.querySelector("#teacherShadowGrid"),
     teacherShadowSummary: document.querySelector("#teacherShadowSummary"),
     teacherRulesDialog: document.querySelector("#teacherRulesDialog"),
@@ -513,7 +514,7 @@
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
       if ((teacherData.get(item.teacher)?.forbidden_periods || []).includes(item.period)) hardErrors.push(`השיבוץ של ${item.student} נקבע בשעה חסומה אצל ${item.teacher}`);
-      if (!teacherAllows(item.teacher, item.student)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ השכבה של ${item.teacher}`);
+      if (!teacherAllows(item.teacher, item.student)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם להגדרת הצוות: ${teacherStudentConstraintExplanation(item.teacher, item.student)}`);
       if (isConstrained("student", item.student, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.student} אינו תואם לאילוץ זמינות שהוגדר`);
       if (isConstrained("teacher", item.teacher, item.day, item.period)) hardErrors.push(`השיבוץ של ${item.teacher} אינו תואם לאילוץ זמינות שהוגדר`);
       const registryRecord = studentRegistry.find(record => record.fullName === item.student);
@@ -709,6 +710,21 @@
     if (forbiddenGrades.length && matchesGrade(forbiddenGrades)) return false;
     if (!teacher.allowed_student_grades) return true;
     return matchesGrade(teacher.allowed_student_grades);
+  }
+
+  function teacherStudentConstraintExplanation(teacherName, studentName) {
+    const student = draft.students.find(item => item.student === studentName);
+    const grade = student?.grade || "השכבה של התלמיד/ה";
+    const teacher = teacherData.get(teacherName);
+    if (activeLocks[studentName]) return `${studentName} נעול/ה ל${activeLocks[studentName]}, ולכן אינו/ה יכול/ה להיות משובץ/ת אצל ${teacherName}`;
+    if (!teacher) return `${teacherName} אינו/ה מופיע/ה בצוות הפרויקט`;
+    const group = grade.startsWith("יא") ? "יא" : grade.startsWith("יב") ? "יב" : grade.startsWith("י") ? "י" : grade;
+    const matchesGrade = grades => grades.includes(grade) || grades.includes(group);
+    const forbidden = teacher.forbidden_student_grades || teacher.excluded_student_grades || [];
+    if (forbidden.length && matchesGrade(forbidden)) return `אצל ${teacherName} שכבת ${grade} חסומה במפורש (שכבות חסומות: ${forbidden.join(", ")})`;
+    const allowed = teacher.allowed_student_grades || [];
+    if (allowed.length && !matchesGrade(allowed)) return `אצל ${teacherName} מוגדרות כשכבות מותרות רק: ${allowed.join(", ")}; התלמיד/ה בכיתה ${grade}`;
+    return `הגדרה פעילה של ${teacherName} אינה מאפשרת שיבוץ עם תלמיד/ה מכיתה ${grade}`;
   }
 
   function teacherPreferencePenalty(teacherName, studentName) {
@@ -1184,7 +1200,7 @@
     if (!candidateForStudent(item.student, item.day, item.period)) problems.push("אינה אפשרית במערכת התלמיד/ה");
     if (!(teacher?.candidates || []).some(candidate => candidate.day === item.day && candidate.period === item.period)) problems.push("אינה זמינה במערכת המורה");
     if ((teacher?.forbidden_periods || []).includes(item.period)) problems.push("נחסמה למורה בשעה זו");
-    if (!teacherAllows(item.teacher, item.student)) problems.push("אינה תואמת לאילוץ המורה והתלמיד/ה");
+    if (!teacherAllows(item.teacher, item.student)) problems.push(teacherStudentConstraintExplanation(item.teacher, item.student));
     if (isConstrained("student", item.student, item.day, item.period) || isConstrained("teacher", item.teacher, item.day, item.period)) problems.push("סותרת אילוץ זמינות פעיל");
     if (registryRecord?.exceptions?.noPeriodZero && item.period === 0) problems.push("סותרת החרגה של התלמיד/ה לגבי שעה 0");
     if (item.period > (projectMeta.lastPeriod ?? 9)) problems.push("אחרי השעה האחרונה שהוגדרה לפרויקט");
@@ -1833,6 +1849,7 @@
     elements.newTeacherQuota.value = summary?.assignment_limit ?? summary?.quota ?? source?.quota ?? "2";
     elements.newTeacherMaxConsecutive.value = source?.max_consecutive ?? "7";
     elements.newTeacherGrades.value = (source?.allowed_student_grades || []).join(", ");
+    elements.newTeacherPreferredGrades.value = (source?.preferred_student_grades || []).join(", ");
     resetTeacherShadowEditor(source);
     elements.teacherEditorDialog.showModal();
     elements.newTeacherName.focus();
@@ -1844,6 +1861,7 @@
     const quota = Number(elements.newTeacherQuota.value);
     const maxConsecutive = Number(elements.newTeacherMaxConsecutive.value);
     const allowedGrades = parseList(elements.newTeacherGrades.value);
+    const preferredGrades = parseList(elements.newTeacherPreferredGrades.value);
     if (!name) { elements.teacherEditorMessage.textContent = "יש להזין שם מלא."; return; }
     if (teacherData.has(name) && name !== activeTeacherEditorName) { elements.teacherEditorMessage.textContent = "מורה בשם זה כבר קיימת בצוות."; return; }
     if (!Number.isInteger(preferred) || preferred < 0 || !Number.isInteger(quota) || quota <= 0 || preferred > quota) { elements.teacherEditorMessage.textContent = "יש להזין יעד מועדף ומכסה מרבית תקינים."; return; }
@@ -1860,7 +1878,7 @@
       }
     });
     if (!candidates.length) { elements.teacherEditorMessage.textContent = "לא נותרה אף שעה פנויה או גמישה למורה."; return; }
-    const source = { ...(teacherData.get(name) || {}), name, quota, preferred_quota: preferred, allowed_student_grades: allowedGrades.length ? allowedGrades : null, preferred_student_grades: teacherData.get(name)?.preferred_student_grades || [], forbidden_periods: teacherData.get(name)?.forbidden_periods || [], max_consecutive: maxConsecutive, base_commitments: baseCommitments, candidates };
+    const source = { ...(teacherData.get(name) || {}), name, quota, preferred_quota: preferred, allowed_student_grades: allowedGrades.length ? allowedGrades : null, preferred_student_grades: preferredGrades, forbidden_periods: teacherData.get(name)?.forbidden_periods || [], max_consecutive: maxConsecutive, base_commitments: baseCommitments, candidates };
     const summary = draft.teachers.find(item => item.teacher === name);
     if (summary) Object.assign(summary, { quota, preferred_quota: preferred, assignment_limit: quota });
     else draft.teachers.push({ teacher: name, quota, preferred_quota: preferred, assignment_limit: quota, assigned: 0, remaining: quota });
