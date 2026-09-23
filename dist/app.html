@@ -118,6 +118,7 @@
           </div>
           <div class="side-actions">
             <button id="manualButton" class="primary-button" type="button">שיבוץ ידני</button>
+            <button id="recalculateButton" class="primary-button" type="button">השלמת שעות חסרות</button>
             <button id="reportButton" class="primary-button" type="button">הפקת דו״ח</button>
             <details class="management-menu">
               <summary>ניהול וכלים</summary>
@@ -178,6 +179,19 @@
         <div class="dialog-actions">
           <button id="addAssignmentButton" class="primary-button" type="button">יצירת השיבוץ</button>
           <button class="secondary-button" value="cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="recalculateDialog" class="edit-dialog">
+      <form method="dialog" class="dialog-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow dark">השלמת שעות חסרות</p><h2>תוצאת החישוב מחדש</h2></div>
+          <button class="close-button" value="cancel" aria-label="סגירה">×</button>
+        </div>
+        <div id="recalculateSummary" class="dialog-note"></div>
+        <div class="dialog-actions">
+          <button class="primary-button" value="cancel">סגירה</button>
         </div>
       </form>
     </dialog>

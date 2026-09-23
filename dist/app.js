@@ -88,6 +88,8 @@
     addOptionSelect: document.querySelector("#addOptionSelect"),
     addDialogNote: document.querySelector("#addDialogNote"),
     addAssignmentButton: document.querySelector("#addAssignmentButton"),
+    recalculateDialog: document.querySelector("#recalculateDialog"),
+    recalculateSummary: document.querySelector("#recalculateSummary"),
     swapDialog: document.querySelector("#swapDialog"),
     swapStudentSelect: document.querySelector("#swapStudentSelect"),
     swapShowEdges: document.querySelector("#swapShowEdges"),
@@ -1043,6 +1045,112 @@
     showToast(`נוספה שעה עבור ${studentName}.`);
   }
 
+  function autoAssignmentFromOption(studentName, option, id) {
+    const student = draft.students.find(item => item.student === studentName);
+    return {
+      id,
+      student: studentName,
+      grade: student?.grade || "",
+      teacher: option.teacher,
+      day: option.day,
+      period: option.period,
+      start: option.start,
+      end: option.end,
+      student_slot_type: option.student_slot_type,
+      teacher_slot_type: option.teacher_slot_type,
+      replaces_for_teacher: option.replaces_for_teacher || null,
+      replaces_student_lesson: option.replaces_student_lesson || null,
+      avoid_if_possible: Boolean(option.avoid_if_possible)
+    };
+  }
+
+  function showRecalculationResult(added, remaining, searchStopped) {
+    const addedText = added
+      ? `<p><strong>נוספו ${added === 1 ? "שעה אחת" : `${added} שעות`}.</strong> השיבוצים הידניים והשיוכים הקיימים נשמרו ללא שינוי.</p>`
+      : "<p><strong>לא נוספו שיבוצים חדשים.</strong> השיבוצים הידניים והשיוכים הקיימים נשמרו ללא שינוי.</p>";
+    const remainingText = remaining.length
+      ? `<p><strong>${searchStopped ? "לא נמצאה בחיפוש שבוצע" : "לא נמצאה"} חלופה חוקית עבור השעות הבאות:</strong></p><ul>${remaining.map(student => `<li><strong>${esc(student.student)}</strong> — ${student.missingNow === 1 ? "חסרה שעה אחת" : `חסרות ${student.missingNow} שעות`}</li>`).join("")}</ul>`
+      : "<p><strong>כל שעות הזכאות שנותרו הושלמו.</strong></p>";
+    const stoppedText = searchStopped
+      ? "<p>נבדקו חלופות רבות, והחיפוש הופסק כדי לא לעכב את העבודה. אפשר לנסות שוב לאחר שינוי באילוצים או בשיבוצים.</p>"
+      : "";
+    elements.recalculateSummary.innerHTML = `${addedText}${remainingText}${stoppedText}`;
+    elements.recalculateDialog.showModal();
+  }
+
+  function recalculateMissingAssignments() {
+    const initialMissing = missingStudents();
+    const totalMissing = initialMissing.reduce((sum, item) => sum + item.missingNow, 0);
+    if (!totalMissing) {
+      showRecalculationResult(0, [], false);
+      return;
+    }
+
+    const fixedAssignments = assignments;
+    const requirements = initialMissing.flatMap(student => Array.from({ length: student.missingNow }, (_, index) => ({
+      student: student.student,
+      id: `${student.student}-${index}`
+    })));
+    const workingAdditions = [];
+    let bestAdditions = [];
+    let visitedNodes = 0;
+    let searchStopped = false;
+    const maxNodes = 12000;
+    const runId = Date.now();
+
+    function chooseRequirement(pending) {
+      let chosen = null;
+      pending.forEach((requirement, index) => {
+        if (chosen?.options.length === 0) return;
+        const options = legalOptionsForStudent(requirement.student);
+        if (!chosen || options.length < chosen.options.length || (options.length === chosen.options.length && requirement.student.localeCompare(chosen.requirement.student, "he") < 0)) {
+          chosen = { requirement, index, options };
+        }
+      });
+      return chosen;
+    }
+
+    function search(pending) {
+      if (visitedNodes >= maxNodes) {
+        searchStopped = true;
+        return false;
+      }
+      visitedNodes += 1;
+      if (workingAdditions.length > bestAdditions.length) bestAdditions = structuredClone(workingAdditions);
+      if (!pending.length) return true;
+      if (workingAdditions.length + pending.length <= bestAdditions.length) return false;
+
+      const choice = chooseRequirement(pending);
+      if (!choice) return false;
+      const nextPending = pending.filter((_, index) => index !== choice.index);
+      for (const option of choice.options) {
+        if (visitedNodes >= maxNodes) {
+          searchStopped = true;
+          return false;
+        }
+        const added = autoAssignmentFromOption(choice.requirement.student, option, `auto-${runId}-${visitedNodes}-${workingAdditions.length}`);
+        assignments.push(added);
+        workingAdditions.push(added);
+        const completed = search(nextPending);
+        workingAdditions.pop();
+        assignments.pop();
+        if (completed) return true;
+      }
+      return search(nextPending);
+    }
+
+    search(requirements);
+    assignments = fixedAssignments;
+    if (bestAdditions.length) {
+      captureUndo("השלמה אוטומטית של שעות חסרות");
+      assignments = fixedAssignments.concat(bestAdditions);
+      saveAssignments();
+      renderAll();
+      showToast(`הושלמו ${bestAdditions.length} שעות חסרות.`);
+    }
+    showRecalculationResult(bestAdditions.length, missingStudents(), searchStopped);
+  }
+
   function deleteAssignment() {
     const assignment = assignments.find(item => item.id === activeAssignmentId);
     if (!assignment) return;
@@ -1208,9 +1316,9 @@
     if (missing.length) {
       const missingHours = missing.reduce((sum, item) => sum + item.missingNow, 0);
       elements.nextActionTitle.textContent = `נותרו ${missingHours} שעות זכאות לשיבוץ`;
-      elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. המערכת תפתח את התלמיד או התלמידה הראשונים שדורשים טיפול.`;
-      elements.nextActionButton.textContent = "טיפול בשעות החסרות";
-      elements.nextActionButton.dataset.action = "missing";
+      elements.nextActionDescription.textContent = `${missing.length} תלמידים עדיין אינם מקבלים את מלוא שעות הזכאות שלהם. אפשר לבקש מהמערכת לנסות להשלים אותן בלי לשנות שיבוצים קיימים.`;
+      elements.nextActionButton.textContent = "השלמת שעות חסרות";
+      elements.nextActionButton.dataset.action = "recalculate";
       return;
     }
     if (warningCount) {
@@ -1233,11 +1341,7 @@
 
   function handleNextAction() {
     const action = elements.nextActionButton.dataset.action;
-    if (action === "missing") {
-      const [first] = missingStudents();
-      if (first) openAddDialog(first.student);
-      return;
-    }
+    if (action === "recalculate") return recalculateMissingAssignments();
     if (action === "warnings") return focusAttentionPanel();
     if (action === "report") openDeputyReport();
   }
@@ -1795,6 +1899,7 @@
   elements.deleteAssignmentButton.addEventListener("click", deleteAssignment);
   elements.alternativeSelect.addEventListener("change", updateDialogOptionNote);
   document.querySelector("#manualButton").addEventListener("click", () => openAddDialog());
+  document.querySelector("#recalculateButton").addEventListener("click", recalculateMissingAssignments);
   elements.addStudentSelect.addEventListener("change", refreshAddDialog);
   elements.addOptionSelect.addEventListener("change", updateAddDialogNote);
   elements.addAssignmentButton.addEventListener("click", addAssignment);
