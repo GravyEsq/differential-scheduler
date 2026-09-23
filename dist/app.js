@@ -1664,7 +1664,10 @@
     const row = timetable.find(item => item.period === period);
     const raw = String(row?.time || "").trim();
     const matches = raw.match(/(\d{1,2}:\d{2}).*?(\d{1,2}:\d{2})/);
-    if (matches) return { start: matches[1], end: matches[2] };
+    if (matches) {
+      const [start, end] = [matches[1], matches[2]].sort();
+      return { start, end };
+    }
     const start = raw.match(/\d{1,2}:\d{2}/)?.[0] || payload.studentAvailability.period_times?.[period]?.start || times[period] || "";
     const nextStart = timetable.find(item => item.period === period + 1)?.time?.match(/\d{1,2}:\d{2}/)?.[0]
       || payload.studentAvailability.period_times?.[period]?.end || times[period + 1] || "";
@@ -2720,7 +2723,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=5").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
