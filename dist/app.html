@@ -53,10 +53,10 @@
       </section>
 
       <section id="summarySection" class="summary" aria-label="סיכום השיבוץ" aria-live="polite" aria-atomic="true">
-        <article><strong id="assignedCount">—</strong><span>שעות משובצות</span></article>
-        <article><strong id="studentCount">—</strong><span>תלמידים עם שיבוץ</span></article>
-        <article><strong id="missingCount">—</strong><span>שעות זכאות שטרם שובצו</span></article>
-        <article><strong id="lateCount">—</strong><span>שיבוצים בשעה האחרונה</span></article>
+        <article><span>שעות משובצות</span><strong id="assignedCount">—</strong></article>
+        <article><span>תלמידים עם שיבוץ</span><strong id="studentCount">—</strong></article>
+        <article class="summary-alert"><span>שעות שטרם שובצו</span><strong id="missingCount">—</strong></article>
+        <article><span>שיבוצים בשעה 9</span><strong id="lateCount">—</strong></article>
       </section>
 
       <nav id="viewTabs" class="view-tabs" aria-label="בחירת תצוגה" role="tablist">
@@ -104,23 +104,30 @@
 
         <aside id="attentionPanel" class="side-panel" tabindex="-1">
           <div class="side-heading">
-            <span class="warning-icon" aria-hidden="true">!</span>
-            <div><h2>נושאים לבדיקה</h2><p>שעות זכאות שטרם שובצו.</p></div>
-          </div>
-          <div id="missingList" aria-live="polite" aria-label="שעות זכאות שטרם שובצו"></div>
-          <section class="load-section">
-            <h3>הקצאת שעות הצוות</h3>
-            <div id="teacherLoads" aria-live="polite" aria-label="הקצאת שעות הצוות"></div>
-          </section>
-          <div class="rule-note">
-            <strong>בקרת שיבוץ</strong>
-            <div id="validationList" class="validation-list"></div>
+            <span class="workspace-icon" aria-hidden="true">✓</span>
+            <div><h2>לוח פעולות</h2><p>שיבוץ, בקרה וכלי עבודה.</p></div>
           </div>
           <div class="side-actions">
-            <p class="workspace-help">אפשר להתחיל ב״סידור מערכת״, לבצע התאמות ידניות לפי הצורך, ולבסוף להפיק דו״ח.</p>
-            <button id="manualButton" class="primary-button" type="button" title="בחירת תלמיד, מורה ומועד באופן ידני">שיבוץ ידני</button>
             <button id="recalculateButton" class="primary-button" type="button" title="בדיקת אילוצים והשלמת שעות חסרות באופן אוטומטי">סידור מערכת</button>
-            <button id="reportButton" class="primary-button" type="button" title="פתיחת דו״ח שיבוצים להדפסה או לשמירה כקובץ PDF">הפקת דו״ח</button>
+            <div class="quick-actions">
+              <button id="manualButton" class="secondary-button" type="button" title="בחירת תלמיד, מורה ומועד באופן ידני">שיבוץ ידני</button>
+              <button id="reportButton" class="secondary-button" type="button" title="פתיחת דו״ח שיבוצים להדפסה או לשמירה כקובץ PDF">הפקת דו״ח</button>
+            </div>
+          </div>
+          <div id="missingList" aria-live="polite" aria-label="שעות זכאות שטרם שובצו"></div>
+          <details class="side-section">
+            <summary><span>עומס הצוות</span><small id="teacherLoadStatus">—</small></summary>
+            <section class="load-section">
+              <div id="teacherLoads" aria-live="polite" aria-label="הקצאת שעות הצוות"></div>
+            </section>
+          </details>
+          <details id="validationSection" class="side-section">
+            <summary><span>בקרת שיבוץ</span><small id="validationStatus">—</small></summary>
+            <div class="rule-note">
+              <div id="validationList" class="validation-list"></div>
+            </div>
+          </details>
+          <div class="side-actions side-tools">
             <details class="management-menu">
               <summary>ניהול וכלים</summary>
               <div class="management-actions">

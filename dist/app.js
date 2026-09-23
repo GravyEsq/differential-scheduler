@@ -448,6 +448,13 @@
       return `<div class="load-row ${optional}"><div class="load-label"><strong>${esc(teacher.teacher)}</strong><span>${used}/${teacher.quota}${preferred}${overflow ? ` · עודף ${overflow}` : ""}</span></div><div class="load-track"><i style="width:${percentage}%"></i></div></div>`;
     }).join("");
     renderValidation();
+    const activeTeachers = draft.teachers.filter(teacher => (byTeacher.get(teacher.teacher) || 0) > 0).length;
+    document.querySelector("#teacherLoadStatus").textContent = `${activeTeachers}/${draft.teachers.length} פעילות`;
+    const issues = scheduleWarnings().filter(item => item.level !== "ok");
+    const validationStatus = document.querySelector("#validationStatus");
+    const errors = issues.filter(item => item.level === "error").length;
+    validationStatus.textContent = !issues.length ? "תקין" : errors ? `${errors} לתיקון` : `${issues.length} הערות`;
+    validationStatus.className = errors ? "error" : issues.length ? "warning" : "";
   }
 
   function scheduleWarnings() {
@@ -643,6 +650,8 @@
     elements.studentsView.hidden = activeView !== "students";
     elements.teachersView.hidden = activeView !== "teachers";
     elements.registryView.hidden = activeView !== "registry";
+    elements.attentionPanel.hidden = activeView === "registry";
+    document.querySelector("#workspaceSection").classList.toggle("registry-active", activeView === "registry");
     if (activeView === "schedule") renderGrid();
     if (activeView === "students") renderStudentsView();
     if (activeView === "teachers") renderTeachersView();
@@ -1461,7 +1470,7 @@
   }
 
   function renderNextAction() {
-    if (isEmptyProject) {
+    if (isEmptyProject || activeView === "registry") {
       elements.nextActionPanel.hidden = true;
       return;
     }
@@ -1469,7 +1478,7 @@
     const warningItems = scheduleWarnings();
     const warningCount = warningItems.filter(item => item.level !== "ok").length;
     const hardErrorCount = warningItems.filter(item => item.level === "error").length;
-    elements.nextActionPanel.hidden = false;
+    elements.nextActionPanel.hidden = !hardErrorCount && !missing.length;
     elements.reviewWarningsButton.hidden = warningCount === 0;
     elements.reviewWarningsButton.textContent = warningCount ? `הצגת ${warningCount} נושאים לבדיקה` : "הצגת נושאים לבדיקה";
     if (hardErrorCount) {
@@ -1487,17 +1496,6 @@
       elements.nextActionButton.dataset.action = "recalculate";
       return;
     }
-    if (warningCount) {
-      elements.nextActionTitle.textContent = "כל שעות הזכאות שובצו";
-      elements.nextActionDescription.textContent = `לפני הפקת הדו״ח מומלץ לעבור על ${warningCount} הנושאים שמסומנים לבדיקה.`;
-      elements.nextActionButton.textContent = "מעבר לנושאים לבדיקה";
-      elements.nextActionButton.dataset.action = "warnings";
-      return;
-    }
-    elements.nextActionTitle.textContent = "השיבוץ הושלם ונבדק";
-    elements.nextActionDescription.textContent = "כל שעות הזכאות שובצו ולא נמצאו התראות. אפשר להפיק דו״ח מסכם.";
-    elements.nextActionButton.textContent = "הפקת דו״ח";
-    elements.nextActionButton.dataset.action = "report";
   }
 
   function focusAttentionPanel() {
