@@ -823,7 +823,7 @@
     return maxConsecutive(periods) <= limit;
   }
 
-  function legalOptionsForStudent(studentName, currentAssignment = null) {
+  function legalOptionsForStudent(studentName, currentAssignment = null, { includeOverQuota = false } = {}) {
     const student = studentData.get(studentName);
     if (!student) return [];
     const currentId = currentAssignment?.id || null;
@@ -845,7 +845,10 @@
         const teacherSlot = teacher.candidates.find(item => item.day === studentSlot.day && item.period === studentSlot.period);
         if (!teacherSlot) return;
         if (occupiedByTeacher.has(`${teacherName}-${slotKey}`)) return;
-        if ((teacherCounts.get(teacherName) || 0) >= assignmentLimits.get(teacherName)) return;
+        const assignmentLimit = assignmentLimits.get(teacherName);
+        const projectedTeacherLoad = (teacherCounts.get(teacherName) || 0) + 1;
+        const overQuota = assignmentLimit !== undefined && projectedTeacherLoad > assignmentLimit;
+        if (overQuota && !includeOverQuota) return;
         if (!teacherConsecutiveOptionIsLegal(teacherName, studentSlot.day, studentSlot.period, currentId)) return;
         if (studentSlot.period > 9) return;
         const same = Boolean(currentAssignment) && teacherName === currentAssignment.teacher && studentSlot.day === currentAssignment.day && studentSlot.period === currentAssignment.period;
@@ -864,15 +867,18 @@
           avoid_if_possible: Boolean(studentSlot.avoid_if_possible),
           quality: candidateQuality(studentSlot) + teacherSlotQuality(teacherSlot),
           same,
-          createsSplit
+          createsSplit,
+          overQuota,
+          projectedTeacherLoad,
+          assignmentLimit
         });
       });
     });
-    return options.sort((a, b) => Number(b.same) - Number(a.same) || a.quality - b.quality || days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period || a.teacher.localeCompare(b.teacher, "he"));
+    return options.sort((a, b) => Number(b.same) - Number(a.same) || Number(a.overQuota) - Number(b.overQuota) || a.quality - b.quality || days.indexOf(a.day) - days.indexOf(b.day) || a.period - b.period || a.teacher.localeCompare(b.teacher, "he"));
   }
 
   function legalAlternatives(assignment) {
-    return legalOptionsForStudent(assignment.student, assignment);
+    return legalOptionsForStudent(assignment.student, assignment, { includeOverQuota: true });
   }
 
   function optionLabel(option) {
@@ -882,6 +888,7 @@
     if (option.student_slot_type.startsWith("קצה")) flags.push("מחוץ למערכת הרגילה");
     if (option.student_slot_type === "דריסת שיעור") flags.push("במקום שיעור קיים");
     if (option.createsSplit) flags.push("מורה נוספת לתלמיד/ה");
+    if (option.overQuota) flags.push("חריגת מכסה");
     return `${option.day}, שעה ${option.period} · ${option.teacher}${flags.length ? ` — ${flags.join(", ")}` : ""}`;
   }
 
@@ -894,7 +901,10 @@
     const teacherSummary = draft.teachers.find(item => item.teacher === option.teacher);
     const preferredQuota = teacherSummary?.preferred_quota ?? teacherSummary?.quota;
     const projectedTeacher = (counts.get(option.teacher) || 0) - (currentAssignment?.teacher === option.teacher ? 1 : 0) + 1;
-    if (preferredQuota !== undefined && teacherSummary && projectedTeacher > preferredQuota && projectedTeacher <= teacherSummary.quota) {
+    const assignmentLimit = assignmentLimits.get(option.teacher);
+    if (assignmentLimit !== undefined && projectedTeacher > assignmentLimit) {
+      warnings.push(`${option.teacher} תחרוג מהמכסה (${projectedTeacher}/${assignmentLimit})`);
+    } else if (preferredQuota !== undefined && teacherSummary && projectedTeacher > preferredQuota && projectedTeacher <= teacherSummary.quota) {
       warnings.push(`${option.teacher} תחרוג מהיעד המועדף של ${preferredQuota} שעות, אך לא מהמכסה המרבית`);
     }
     const selectedStudent = studentName || currentAssignment?.student;
@@ -913,6 +923,8 @@
     const current = assignments.find(item => item.id === activeAssignmentId);
     const warnings = optionWarnings(option, current);
     const alternatives = (elements.alternativeSelect._options || []).filter(item => !item.same);
+    const quotaOnlyAlternatives = alternatives.length > 0 && alternatives.every(item => item.overQuota);
+    if (quotaOnlyAlternatives) warnings.unshift("לא נמצאה חלופה אחרת שעומדת במכסה; האפשרויות המוצגות חוקיות מבחינת השעות והאילוצים, אך חורגות ממכסת מורה");
     const best = alternatives.reduce((result, item) => !result || item.quality < result.quality ? item : result, null);
     if (!option.same && best && option.quality > best.quality) warnings.unshift(`קיימת חלופה עדיפה: ${optionLabel(best)}`);
     elements.dialogNote.textContent = warnings.length
