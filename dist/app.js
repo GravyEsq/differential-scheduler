@@ -92,6 +92,7 @@
     dialogStudent: document.querySelector("#dialogStudent"),
     dialogCurrent: document.querySelector("#dialogCurrent"),
     alternativeSelect: document.querySelector("#alternativeSelect"),
+    editShowEdges: document.querySelector("#editShowEdges"),
     dialogNote: document.querySelector("#dialogNote"),
     saveMoveButton: document.querySelector("#saveMoveButton"),
     deleteAssignmentButton: document.querySelector("#deleteAssignmentButton"),
@@ -1098,18 +1099,29 @@
       : "החלופה עומדת בכללים שהוגדרו ואינה מוסיפה התראה.";
   }
 
+  function renderEditorAlternatives() {
+    const allOptions = elements.alternativeSelect._allOptions || [];
+    const options = allOptions
+      .filter(option => elements.editShowEdges.checked || (option.period !== 0 && option.period !== 8))
+      .sort((first, second) => Number(first.period === 0 || first.period === 8) - Number(second.period === 0 || second.period === 8));
+    elements.alternativeSelect.innerHTML = options.map((option, index) => `<option value="${index}">${esc(optionLabel(option))}</option>`).join("");
+    elements.alternativeSelect._options = options;
+    elements.saveMoveButton.disabled = options.length === 0;
+    if (options.length) updateDialogOptionNote();
+    else elements.dialogNote.textContent = allOptions.length
+      ? "כל החלופות הזמינות הן בשעות קצה. סמנו „הצגת קצוות יום” כדי לראות אותן."
+      : "לא נמצאה כרגע חלופה שמתאימה לכללים שהוגדרו.";
+  }
+
   function openEditor(assignmentId) {
     const assignment = assignments.find(item => item.id === assignmentId);
     if (!assignment) return;
     activeAssignmentId = assignmentId;
     elements.dialogStudent.textContent = assignment.student;
     elements.dialogCurrent.innerHTML = `<strong>השיבוץ הנוכחי:</strong> ${esc(assignment.day)}, שעה ${assignment.period} (${esc(assignment.start)}–${esc(assignment.end)}) אצל ${esc(assignment.teacher)}.${assignment.groupId ? " <strong>זהו שיבוץ זוגי; העברה תבטל את הצימוד.</strong>" : ""}`;
-    const options = legalAlternatives(assignment);
-    elements.alternativeSelect.innerHTML = options.map((option, index) => `<option value="${index}">${esc(optionLabel(option))}</option>`).join("");
-    elements.alternativeSelect._options = options;
-    elements.saveMoveButton.disabled = options.length === 0;
-    if (options.length) updateDialogOptionNote();
-    else elements.dialogNote.textContent = "לא נמצאה כרגע חלופה שמתאימה לכללים שהוגדרו.";
+    elements.editShowEdges.checked = false;
+    elements.alternativeSelect._allOptions = legalAlternatives(assignment);
+    renderEditorAlternatives();
     elements.dialog.showModal();
   }
 
@@ -2625,6 +2637,7 @@
   elements.saveMoveButton.addEventListener("click", saveMove);
   elements.deleteAssignmentButton.addEventListener("click", deleteAssignment);
   elements.alternativeSelect.addEventListener("change", updateDialogOptionNote);
+  elements.editShowEdges.addEventListener("change", renderEditorAlternatives);
   document.querySelector("#manualButton").addEventListener("click", () => openAddDialog());
   document.querySelector("#recalculateButton").addEventListener("click", recalculateMissingAssignments);
   elements.applySchedulePlanButton.addEventListener("click", applySchedulePlan);
@@ -2780,7 +2793,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=10").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=11").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
