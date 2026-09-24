@@ -56,7 +56,6 @@
         <article><span>שעות משובצות</span><strong id="assignedCount">—</strong></article>
         <article><span>תלמידים עם שיבוץ</span><strong id="studentCount">—</strong></article>
         <article class="summary-alert"><span>שעות שטרם שובצו</span><strong id="missingCount">—</strong></article>
-        <article><span>שיבוצים בשעה 9</span><strong id="lateCount">—</strong></article>
       </section>
 
       <nav id="viewTabs" class="view-tabs" aria-label="בחירת תצוגה" role="tablist">
@@ -243,7 +242,7 @@
           <label><span>מכסת שעות מרבית</span><input id="ruleAssignmentLimit" type="number" min="0" max="50" /></label>
           <label class="wide-field choice-card compact-choice"><input id="ruleAllowOverQuota" type="checkbox" /><span><strong>אפשר לסידור המערכת לחרוג מהיעד המועדף</strong><small>לעולם לא מעבר למכסה המרבית. בהסרה, הסידור האוטומטי יעצור ביעד המועדף.</small></span></label>
           <label><span>מספר שעות רצופות מרבי</span><input id="ruleMaxConsecutive" type="number" min="1" max="7" placeholder="ללא הגבלה" /></label>
-          <label><span>שעות חסומות</span><input id="ruleForbiddenPeriods" placeholder="לדוגמה: 0, 9" /></label>
+          <label><span>שעות חסומות</span><input id="ruleForbiddenPeriods" placeholder="לדוגמה: 0, 8" /></label>
           <label class="wide-field"><span>שכבות מותרות</span><input id="ruleAllowedGrades" placeholder="לדוגמה: יא, יא4" /></label>
           <label class="wide-field"><span>שכבות חסומות</span><input id="ruleForbiddenGrades" placeholder="לדוגמה: יא5" /></label>
           <label class="wide-field"><span>שכבות מועדפות</span><input id="rulePreferredGrades" placeholder="לדוגמה: י, יא" /></label>
@@ -348,7 +347,7 @@
     </dialog>
 
     <dialog id="settingsDialog" class="edit-dialog settings-dialog">
-      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות הפרויקט</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="9" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 9" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
+      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות הפרויקט</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="8" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 8" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
     </dialog>
 
     <dialog id="managementDialog" class="management-dialog">

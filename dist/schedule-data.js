@@ -6,8 +6,8 @@ window.SCHEDULE_DATA = {
     team: "",
     subject: "שיבוצים",
     aliases: [],
-    lastPeriod: 9,
-    avoidPeriods: []
+    lastPeriod: 8,
+    avoidPeriods: [0, 8]
   },
   schedule: {
     schemaVersion: 2,
@@ -18,8 +18,7 @@ window.SCHEDULE_DATA = {
       assigned_hours: 0,
       missing_hours: 0,
       unserved_students: 0,
-      split_students: 0,
-      period9_assignments: 0
+      split_students: 0
     },
     assignments: [],
     students: [],

@@ -2,6 +2,8 @@
   "use strict";
 
   const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
+  // שעה 9 עשויה להופיע במערכת המקור, אך אינה זמינה לשיבוץ דיפרנציאלי.
+  const MAX_SCHEDULING_PERIOD = 8;
   const PERIOD_TIMES = {
     0: { start: "07:45", end: "08:25" }, 1: { start: "08:30", end: "09:15" },
     2: { start: "09:15", end: "10:00" }, 3: { start: "10:20", end: "11:05" },
@@ -377,7 +379,6 @@
     let cost = (studentCosts[studentSlot.category] ?? 100) + (teacherCosts[teacherSlot.category] ?? 20);
     if (studentSlot.period < 1 || studentSlot.period > 6) cost += 20;
     if (studentSlot.avoid_if_possible || teacherSlot.avoid_if_possible) cost += 120;
-    if (studentSlot.period === 9) cost += 450;
     if (student.preferredTeacher && student.preferredTeacher !== teacher.name) cost += 60;
     const group = gradeGroup(student.grade);
     if (teacher.preferred_student_grades.length && !teacher.preferred_student_grades.includes(group) && !teacher.preferred_student_grades.includes(student.grade)) cost += 35;
@@ -482,7 +483,7 @@
       status: "הצעה ראשונית",
       defaultLocks: Object.fromEntries(students.filter(student => student.requiredTeacher).map(student => [student.student, student.requiredTeacher])),
       rules_applied: { subject: meta.subject, aliases: meta.aliases, preferred_periods: "1-6", last_allowed_period: meta.lastPeriod, avoid_periods: meta.avoidPeriods, teacher_capacity_is_maximum: true },
-      metrics: { assigned_hours: result.flow, missing_hours: requiredHours - result.flow, unserved_students: studentSummary.filter(item => !item.assigned).length, split_students: studentSummary.filter(item => !item.same_teacher).length, period9_assignments: assignments.filter(item => item.period === 9).length },
+      metrics: { assigned_hours: result.flow, missing_hours: requiredHours - result.flow, unserved_students: studentSummary.filter(item => !item.assigned).length, split_students: studentSummary.filter(item => !item.same_teacher).length },
       assignments,
       students: studentSummary,
       teachers: teacherSummary
@@ -495,7 +496,7 @@
     return {
       id: `project-${Date.now()}-${subject.replace(/\s+/g, "-")}`,
       school: clean(elements.school.value), year: clean(elements.year.value), team: clean(elements.team.value) || `צוות ${subject}`, subject, aliases,
-      lastPeriod: Number(elements.lastPeriod.value), avoidPeriods: parsePeriods(elements.avoidPeriods.value)
+      lastPeriod: Math.min(MAX_SCHEDULING_PERIOD, Math.max(0, Number(elements.lastPeriod.value) || MAX_SCHEDULING_PERIOD)), avoidPeriods: parsePeriods(elements.avoidPeriods.value).filter(period => period <= MAX_SCHEDULING_PERIOD)
     };
   }
 
@@ -631,8 +632,8 @@
 
   function teacherTemplate() {
     downloadCsv("תבנית-מורים.csv", TEACHER_HEADERS, [
-      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה גמישה", "י;יא", "יא", "0;9", 7, "1;2;4;5"],
-      ["מורה לדוגמה", 1, 2, "שלישי", 4, "פנויה", "י;יא", "יא", "0;9", 7, "1;2;3;5"]
+      ["מורה לדוגמה", 1, 2, "ראשון", 3, "שעה גמישה", "י;יא", "יא", "0;8", 7, "1;2;4;5"],
+      ["מורה לדוגמה", 1, 2, "שלישי", 4, "פנויה", "י;יא", "יא", "0;8", 7, "1;2;3;5"]
     ]);
   }
 

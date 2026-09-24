@@ -1,4 +1,4 @@
-const CACHE_NAME = "differential-shell-v12";
+const CACHE_NAME = "differential-shell-v13";
 const APP_SHELL = ["./", "./index.html", "./app.html", "./setup.html", "./styles.css", "./app.js", "./setup.js", "./schedule-data.js", "./xlsx-reader.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", event => {

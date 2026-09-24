@@ -30,10 +30,14 @@
   };
   const draft = payload.schedule;
   const days = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
+  // שעה 9 נשארת זמינה רק לצורך קריאת מערכות המקור. שיבוץ דיפרנציאלי מסתיים בשעה 8.
+  const MAX_SCHEDULING_PERIOD = 8;
   const times = {
     0: "07:45", 1: "08:30", 2: "09:15", 3: "10:20", 4: "11:05",
     5: "12:05", 6: "12:50", 7: "14:00", 8: "14:45", 9: "15:30"
   };
+  projectMeta.lastPeriod = Math.min(MAX_SCHEDULING_PERIOD, Math.max(0, Number(projectMeta.lastPeriod ?? MAX_SCHEDULING_PERIOD)));
+  projectMeta.avoidPeriods = [...new Set((projectMeta.avoidPeriods || []).filter(period => Number.isInteger(period) && period >= 0 && period <= MAX_SCHEDULING_PERIOD))];
   const projectId = String(projectMeta.id || `${projectMeta.school || "school"}-${projectMeta.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
   const storageKey = `differential-project-${projectId}-assignments-v1`;
   const lockStorageKey = `differential-project-${projectId}-locks-v1`;
@@ -218,11 +222,11 @@
   function loadSavedConstraints() {
     try {
       const saved = JSON.parse(localStorage.getItem(constraintStorageKey));
-      if (Array.isArray(saved)) return saved;
+      if (Array.isArray(saved)) return saved.filter(item => Number.isInteger(item?.period) && item.period >= 0 && item.period <= MAX_SCHEDULING_PERIOD);
     } catch (_) {
       localStorage.removeItem(constraintStorageKey);
     }
-    return Array.isArray(payload.constraints) ? payload.constraints : [];
+    return Array.isArray(payload.constraints) ? payload.constraints.filter(item => Number.isInteger(item?.period) && item.period >= 0 && item.period <= MAX_SCHEDULING_PERIOD) : [];
   }
 
   function loadShareWilling() {
@@ -405,8 +409,7 @@
     return {
       assigned: assignments.length,
       coveredStudents: draft.students.filter(student => (byStudent.get(student.student) || 0) > 0).length,
-      missing: draft.students.reduce((sum, student) => sum + Math.max(0, student.required - (byStudent.get(student.student) || 0)), 0),
-      late: assignments.filter(item => item.period === 9).length
+      missing: draft.students.reduce((sum, student) => sum + Math.max(0, student.required - (byStudent.get(student.student) || 0)), 0)
     };
   }
 
@@ -415,7 +418,6 @@
     document.querySelector("#assignedCount").textContent = metrics.assigned;
     document.querySelector("#studentCount").textContent = metrics.coveredStudents;
     document.querySelector("#missingCount").textContent = metrics.missing;
-    document.querySelector("#lateCount").textContent = metrics.late;
   }
 
   function filteredAssignments() {
@@ -438,7 +440,7 @@
 
     const cells = [`<div class="grid-cell grid-head" role="columnheader">שעה</div>`];
     days.forEach(day => cells.push(`<div class="grid-cell grid-head" role="columnheader">${day}</div>`));
-    for (let period = 0; period <= 9; period += 1) {
+    for (let period = 0; period <= MAX_SCHEDULING_PERIOD; period += 1) {
       cells.push(`<div class="grid-cell period-cell" role="rowheader"><strong>${period}</strong><small>${times[period]}</small></div>`);
       days.forEach(day => {
         const lessons = (bySlot.get(`${day}-${period}`) || []).sort((a, b) => a.teacher.localeCompare(b.teacher, "he"));
@@ -512,12 +514,12 @@
       const teachers = new Set(assignments.filter(item => item.student === student.student).map(item => item.teacher));
       return teachers.size > 1;
     });
-    const late = assignments.filter(item => item.period === 9);
     const edgeAssignments = assignments.filter(item => item.student_slot_type.startsWith("קצה"));
     const overridden = assignments.filter(item => item.student_slot_type === "דריסת שיעור");
     const hardErrors = [];
 
     assignments.forEach(item => {
+      if (item.period > MAX_SCHEDULING_PERIOD) hardErrors.push(`השיבוץ של ${item.student} נקבע אחרי תקרת השיבוץ (שעה ${MAX_SCHEDULING_PERIOD})`);
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
@@ -559,7 +561,6 @@
 
     [...new Set(hardErrors)].forEach(text => warnings.push({ level: "error", text }));
     if (splitStudents.length) warnings.push({ level: "warning", text: `${splitStudents.length} תלמידים משובצים אצל יותר ממורה אחד: ${splitStudents.map(item => item.student).join(", ")}` });
-    if (late.length) warnings.push({ level: "warning", text: `${late.length} שיבוצים מתקיימים בשעה האחרונה` });
     if (edgeAssignments.length) warnings.push({ level: "warning", text: `${edgeAssignments.length} שיבוצים מתקיימים מחוץ למערכת הרגילה` });
     const sharedGroups = new Set(assignments.filter(item => item.groupId).map(item => item.groupId));
     if (sharedGroups.size) warnings.push({ level: "warning", text: `${sharedGroups.size} שעות משותפות לשני תלמידים` });
@@ -788,7 +789,7 @@
   function candidateQuality(candidate) {
     const rank = { "חלון": 0, "שיעור במקצוע": 1, "קצה לפני": 3, "קצה אחרי": 3, "דריסת שיעור": 5 };
     (projectMeta.aliases || []).forEach(alias => { rank[alias] = 1; });
-    return (rank[candidate?.category] ?? 8) + (candidate?.period === 9 ? 20 : 0);
+    return rank[candidate?.category] ?? 8;
   }
 
   function teacherSlotQuality(candidate) {
@@ -844,10 +845,8 @@
     const oldQuality = [...firstLessons, ...secondLessons].reduce((sum, item) => sum + candidateQuality({ category: item.student_slot_type, period: item.period }), 0);
     const warningParts = [];
     const allDestinations = [...firstDestinations, ...secondDestinations];
-    const lateCount = allDestinations.filter(item => item.period === 9).length;
     const edgeCount = allDestinations.filter(item => item.category.startsWith("קצה")).length;
     const overrideCount = allDestinations.filter(item => item.category === "דריסת שיעור").length;
-    if (lateCount) warningParts.push(`${lateCount} שעות בשעה 9`);
     if (edgeCount) warningParts.push(`${edgeCount} שעות מחוץ למערכת הרגילה`);
     if (overrideCount) warningParts.push(`${overrideCount} שיבוצים במקום שיעור קיים`);
     warningParts.push(...quotaWarningsForSwap([firstTeacher, secondTeacher]));
@@ -1012,7 +1011,7 @@
       if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
       const registryRecord = studentRegistry.find(record => record.fullName === studentName);
       if (registryRecord?.exceptions?.noPeriodZero && studentSlot.period === 0) return;
-      if (studentSlot.period > (projectMeta.lastPeriod ?? 9)) return;
+      if (studentSlot.period > projectMeta.lastPeriod) return;
       teacherData.forEach((teacher, teacherName) => {
         if (!teacherAllows(teacherName, studentName)) return;
         if ((teacher.forbidden_periods || []).includes(studentSlot.period)) return;
@@ -1064,7 +1063,6 @@
   function optionLabel(option) {
     const flags = [];
     if (option.same) flags.push("נוכחי");
-    if (option.period === 9) flags.push("שעה 9");
     if (option.student_slot_type.startsWith("קצה")) flags.push("מחוץ למערכת הרגילה");
     if (option.continued_day) flags.push("רצף עם שעה קיימת");
     if (option.student_slot_type === "דריסת שיעור") flags.push("במקום שיעור קיים");
@@ -1076,7 +1074,6 @@
 
   function optionWarnings(option, currentAssignment = null, studentName = null) {
     const warnings = [];
-    if (option.period === 9) warnings.push("זו שעה 9, שממנה ביקשת להימנע ככל האפשר");
     if (option.createsSplit) warnings.push("בעקבות השינוי התלמיד/ה ישובץ/תשובץ אצל יותר ממורה אחד");
     if (option.student_slot_type === "דריסת שיעור") warnings.push(`השיבוץ יתקיים במקום שיעור קיים${option.replaces_student_lesson ? `: ${option.replaces_student_lesson}` : ""}`);
     const counts = assignmentCounts().byTeacher;
@@ -1269,7 +1266,7 @@
     if (!teacherAllows(item.teacher, item.student)) problems.push(teacherStudentConstraintExplanation(item.teacher, item.student));
     if (isConstrained("student", item.student, item.day, item.period) || isConstrained("teacher", item.teacher, item.day, item.period)) problems.push("סותרת אילוץ זמינות פעיל");
     if (registryRecord?.exceptions?.noPeriodZero && item.period === 0) problems.push("סותרת החרגה של התלמיד/ה לגבי שעה 0");
-    if (item.period > (projectMeta.lastPeriod ?? 9)) problems.push("אחרי השעה האחרונה שהוגדרה לפרויקט");
+    if (item.period > projectMeta.lastPeriod) problems.push(`אחרי תקרת השיבוץ (שעה ${projectMeta.lastPeriod})`);
     return problems;
   }
 
@@ -1573,7 +1570,7 @@
 
   function openConstraintsDialog() {
     elements.constraintDay.innerHTML = days.map(day => `<option value="${day}">${day}</option>`).join("");
-    elements.constraintPeriod.innerHTML = Object.keys(times).map(period => `<option value="${period}">שעה ${period} · ${times[period]}</option>`).join("");
+    elements.constraintPeriod.innerHTML = Array.from({ length: MAX_SCHEDULING_PERIOD + 1 }, (_, period) => `<option value="${period}">שעה ${period} · ${times[period]}</option>`).join("");
     refreshConstraintPeople();
     renderConstraints();
     elements.constraintsDialog.showModal();
@@ -1943,7 +1940,7 @@
     const candidates = [];
     const baseCommitments = [];
     days.forEach(day => {
-      for (let period = 0; period <= (projectMeta.lastPeriod ?? 9); period += 1) {
+      for (let period = 0; period <= projectMeta.lastPeriod; period += 1) {
         const state = teacherShadowSchedule?.[shadowSlotKey(day, period)] || "free";
         if (state === "fixed") baseCommitments.push({ day, period });
         if (state !== "free" && state !== "flexible") continue;
@@ -2268,7 +2265,7 @@
     document.querySelector("#settingsTeam").value = projectMeta.team || "";
     document.querySelector("#settingsSubject").value = projectMeta.subject || "";
     document.querySelector("#settingsAliases").value = (projectMeta.aliases || []).filter(item => item !== projectMeta.subject).join(", ");
-    document.querySelector("#settingsLastPeriod").value = projectMeta.lastPeriod ?? 9;
+    document.querySelector("#settingsLastPeriod").value = projectMeta.lastPeriod;
     document.querySelector("#settingsAvoidPeriods").value = (projectMeta.avoidPeriods || []).join(", ");
     elements.settingsDialog.showModal();
   }
@@ -2281,8 +2278,8 @@
     projectMeta.team = document.querySelector("#settingsTeam").value.trim();
     projectMeta.subject = subject;
     projectMeta.aliases = [...new Set([subject, ...document.querySelector("#settingsAliases").value.split(",").map(item => item.trim()).filter(Boolean)])];
-    projectMeta.lastPeriod = Number(document.querySelector("#settingsLastPeriod").value) || 9;
-    projectMeta.avoidPeriods = document.querySelector("#settingsAvoidPeriods").value.split(",").map(Number).filter(Number.isInteger);
+    projectMeta.lastPeriod = Math.min(MAX_SCHEDULING_PERIOD, Math.max(0, Number(document.querySelector("#settingsLastPeriod").value) || MAX_SCHEDULING_PERIOD));
+    projectMeta.avoidPeriods = document.querySelector("#settingsAvoidPeriods").value.split(",").map(Number).filter(period => Number.isInteger(period) && period >= 0 && period <= MAX_SCHEDULING_PERIOD);
     payload.meta = projectMeta;
     safeLocalSet(activeProjectKey, JSON.stringify(payload));
     document.querySelector("#projectEyebrow").textContent = `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
@@ -2297,7 +2294,7 @@
   }
 
   function parsePeriods(value) {
-    return [...new Set(parseList(value).map(Number).filter(period => Number.isInteger(period) && period >= 0 && period <= 9))].sort((a, b) => a - b);
+    return [...new Set(parseList(value).map(Number).filter(period => Number.isInteger(period) && period >= 0 && period <= MAX_SCHEDULING_PERIOD))].sort((a, b) => a - b);
   }
 
   function selectedTeacherRule() {
@@ -2452,7 +2449,7 @@
     data.assignments.forEach((item, index) => {
       if (!item || !knownStudents.has(item.student)) throw new Error(`בשיבוץ מספר ${index + 1} מופיע תלמיד שאינו קיים במערכת: ${JSON.stringify(item?.student)}`);
       if (!knownTeachers.has(item.teacher)) throw new Error(`בשיבוץ מספר ${index + 1} מופיעה מורה שאינה קיימת במערכת.`);
-      if (!days.includes(item.day) || !Number.isInteger(item.period) || item.period < 0 || item.period > 9) {
+      if (!days.includes(item.day) || !Number.isInteger(item.period) || item.period < 0 || item.period > MAX_SCHEDULING_PERIOD) {
         throw new Error(`בשיבוץ מספר ${index + 1} היום או השעה אינם תקינים.`);
       }
     });
