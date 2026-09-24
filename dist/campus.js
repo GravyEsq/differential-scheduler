@@ -40,9 +40,12 @@
     return storedCampus || defaultCampus();
   }
   function saveCampus() {
-    campus.updatedAt = new Date().toISOString();
-    localStorage.setItem(CAMPUS_KEY, JSON.stringify(campus));
-    localStorage.setItem(LEGACY_REGISTRY_KEY, JSON.stringify(campus.students));
+    try {
+      campus.updatedAt = new Date().toISOString();
+      localStorage.setItem(CAMPUS_KEY, JSON.stringify(campus));
+      localStorage.setItem(LEGACY_REGISTRY_KEY, JSON.stringify(campus.students));
+      return true;
+    } catch (_) { showToast("לא ניתן לשמור במכשיר. הורידו גיבוי, בדקו שיש מקום פנוי בדפדפן ונסו שוב."); return false; }
   }
   function esc(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
   function showToast(text) { elements.toast.textContent = text; elements.toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => elements.toast.classList.remove("visible"), 3500); }
@@ -120,13 +123,14 @@
   }
   async function scanLegacyDocument() {
     const [file] = elements.legacyFile.files; if (!file) return showToast("בחרו קובץ Word שהורד מהמסמך הישן.");
+    if (!campus.students.length) return showToast("לפני ייבוא מהפורמט הישן יש לקלוט תלמידים למאגר, כדי שהמערכת תוכל לזהות אותם בבטחה.");
     elements.legacyScan.disabled = true; elements.legacyStatus.textContent = "קורא את הטבלאות ומכין תצוגה מקדימה…"; elements.legacyStatus.className = "file-status";
     try {
       const { tables } = await window.DocxTableReader.parseTables(file); const result = oldFormatChanges(tables); pendingLegacyImport = result;
       const requests = result.changes.filter(item => item.kind === "request"); const reservations = result.changes.filter(item => item.kind === "reservation");
       elements.legacyPreview.hidden = false; elements.legacyPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — הפורמט הישן</h3><p>זוהו ${requests.length} עדכוני זכאות ו־${reservations.length} שעות דיפרנציאליות. השעות יישמרו כהזמנות מהפורמט הישן עד לשיוך שלהן בפרויקט המקצוע.</p></div></div><div class="legacy-change-list">${result.changes.map((item, index) => `<label><input type="checkbox" data-legacy-change="${index}" checked /> <span><strong>${esc(item.student.fullName)}</strong> · ${esc(item.subject)} · ${item.kind === "request" ? `${item.hours} שעות` : `${item.day}, שעה ${item.period}`}</span></label>`).join("") || "<p>לא זוהו שורות חד־משמעיות. אפשר להמשיך לעבוד מהמאגר ולערוך ידנית.</p>"}${result.unknownRows.length ? `<small>${result.unknownRows.length} שורות נותרו לבדיקה ולא ייובאו.</small>` : ""}</div><div class="preview-actions"><button id="applyLegacyImport" class="primary-button" type="button" ${result.changes.length ? "" : "disabled"}>אישור והחלת השינויים</button><button id="discardLegacyImport" class="secondary-button" type="button">ביטול</button></div>`;
       document.querySelector("#discardLegacyImport").addEventListener("click", () => { pendingLegacyImport = null; elements.legacyPreview.hidden = true; }); document.querySelector("#applyLegacyImport")?.addEventListener("click", applyLegacyImport);
-      elements.legacyStatus.textContent = `נמצאו ${tables.length} טבלאות. שום דבר לא נשמר לפני אישור.`; elements.legacyStatus.className = "file-status ok";
+      elements.legacyStatus.textContent = result.changes.length ? `נמצאו ${tables.length} טבלאות ו־${result.changes.length} שינויים אפשריים. שום דבר לא נשמר לפני אישור.` : `נמצאו ${tables.length} טבלאות, אך לא זוהו שורות חד־משמעיות. בדקו שהקובץ הוא ההורדה העדכנית מהמסמך ושהתלמידים כבר נקלטו במאגר.`; elements.legacyStatus.className = result.changes.length ? "file-status ok" : "file-status error";
     } catch (error) { elements.legacyStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את הקובץ."; elements.legacyStatus.className = "file-status error"; }
     finally { elements.legacyScan.disabled = false; }
   }
@@ -239,5 +243,5 @@
   elements.subjectList.addEventListener("click", event => { const button = event.target.closest("[data-open-subject]"); if (!button) return; const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return; localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] })); location.href = "setup.html"; });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=16").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=17").catch(() => {});
 })();
