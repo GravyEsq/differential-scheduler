@@ -19,7 +19,7 @@
     <main id="campusMain" class="campus-main" tabindex="-1">
       <section class="campus-hero">
         <div><p class="eyebrow dark">מאגר אחד לכל המקצועות</p><h2 id="campusTitle">התחילו את מאגר התיכון</h2><p id="campusDescription">כאן נשמרים התלמידים, המערכות, המקצועות והצעות הצוות של שנת הלימודים הפעילה.</p></div>
-        <button id="archiveYearButton" class="secondary-button" type="button">יצירת צילום סוף שנה</button>
+        <div class="campus-hero-actions"><button id="globalReportButton" class="secondary-button" type="button">דו״ח כולל</button><button id="exportCampusButton" class="secondary-button" type="button">גיבוי המאגר</button><label class="secondary-button restore-campus-button">שחזור מאגר<input id="restoreCampusFile" type="file" accept=".json,application/json" /></label><button id="archiveYearButton" class="secondary-button" type="button">יצירת צילום סוף שנה</button></div>
       </section>
 
       <section id="campusSetup" class="campus-card">
@@ -59,6 +59,7 @@
       </section>
     </main>
     <div id="campusToast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="requestsDialog" class="edit-dialog"><form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">מאגר התיכון</p><h2 id="requestsDialogTitle">זכאויות תלמיד/ה</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><p class="dialog-copy">מגדירים בקשה לכל מקצוע. השינויים ישתקפו בפרויקטים הרלוונטיים כאשר ייפתחו.</p><div id="campusRequestRows" class="request-rows"></div><button id="addCampusRequestRow" class="text-button" type="button">+ הוספת מקצוע</button><div class="dialog-actions"><button id="saveCampusRequests" class="primary-button" type="button">שמירת זכאויות</button><button class="secondary-button" value="cancel">ביטול</button></div></form></dialog>
     <script src="xlsx-reader.js"></script>
     <script src="campus.js"></script>
   </body>

@@ -11,21 +11,21 @@
   ]);
   const elements = {
     setup: document.querySelector("#campusSetup"), dashboard: document.querySelector("#campusDashboard"), school: document.querySelector("#campusSchool"), year: document.querySelector("#campusYear"), save: document.querySelector("#saveCampusButton"),
-    title: document.querySelector("#campusTitle"), description: document.querySelector("#campusDescription"), archive: document.querySelector("#archiveYearButton"),
+    title: document.querySelector("#campusTitle"), description: document.querySelector("#campusDescription"), archive: document.querySelector("#archiveYearButton"), report: document.querySelector("#globalReportButton"), export: document.querySelector("#exportCampusButton"), restore: document.querySelector("#restoreCampusFile"),
     studentCount: document.querySelector("#campusStudentCount"), subjectCount: document.querySelector("#campusSubjectCount"), teacherCount: document.querySelector("#campusTeacherCount"), archiveCount: document.querySelector("#campusArchiveCount"),
     manualForm: document.querySelector("#manualSubjectForm"), manualName: document.querySelector("#manualSubjectName"), manualAliases: document.querySelector("#manualSubjectAliases"), listForm: document.querySelector("#listSubjectForm"), list: document.querySelector("#subjectList"), subjectPreview: document.querySelector("#subjectPreview"), subjectList: document.querySelector("#subjectListView"),
-    files: document.querySelector("#scheduleFiles"), scan: document.querySelector("#scanSchedulesButton"), scanStatus: document.querySelector("#scanStatus"), scanPreview: document.querySelector("#scanPreview"), students: document.querySelector("#campusStudentsView"), archives: document.querySelector("#archiveList"), toast: document.querySelector("#campusToast")
+    files: document.querySelector("#scheduleFiles"), scan: document.querySelector("#scanSchedulesButton"), scanStatus: document.querySelector("#scanStatus"), scanPreview: document.querySelector("#scanPreview"), students: document.querySelector("#campusStudentsView"), archives: document.querySelector("#archiveList"), toast: document.querySelector("#campusToast"), requestsDialog: document.querySelector("#requestsDialog"), requestsTitle: document.querySelector("#requestsDialogTitle"), requestRows: document.querySelector("#campusRequestRows"), addRequestRow: document.querySelector("#addCampusRequestRow"), saveRequests: document.querySelector("#saveCampusRequests")
   };
   let campus = loadCampus();
   let pendingImport = null;
   let toastTimer = null;
 
-  function defaultCampus() { return { schemaVersion: 1, school: "", year: "", subjects: [], students: [], archives: [], updatedAt: null }; }
+  function defaultCampus() { return { schemaVersion: 1, school: "", year: "", subjects: [], students: [], assignments: [], archives: [], updatedAt: null }; }
   function loadCampus() {
     let storedCampus = null;
     try {
       const saved = JSON.parse(localStorage.getItem(CAMPUS_KEY));
-      if (saved && typeof saved === "object") storedCampus = { ...defaultCampus(), ...saved, subjects: Array.isArray(saved.subjects) ? saved.subjects : [], students: Array.isArray(saved.students) ? saved.students : [], archives: Array.isArray(saved.archives) ? saved.archives : [] };
+      if (saved && typeof saved === "object") storedCampus = { ...defaultCampus(), ...saved, subjects: Array.isArray(saved.subjects) ? saved.subjects : [], students: Array.isArray(saved.students) ? saved.students : [], assignments: Array.isArray(saved.assignments) ? saved.assignments : [], archives: Array.isArray(saved.archives) ? saved.archives : [] };
     } catch (_) { /* Start with a clean local shell. */ }
     try {
       const legacy = JSON.parse(localStorage.getItem(LEGACY_REGISTRY_KEY));
@@ -73,7 +73,7 @@
     elements.teacherCount.textContent = new Set(campus.subjects.flatMap(subject => (subject.suggestedTeachers || []).map(item => item.name))).size;
     elements.archiveCount.textContent = campus.archives.length;
     elements.subjectList.innerHTML = campus.subjects.length ? campus.subjects.sort((a, b) => a.name.localeCompare(b.name, "he")).map(subject => `<article class="subject-chip"><strong>${esc(subject.name)}</strong>${subject.aliases?.length ? `<small>${esc(subject.aliases.join(" · "))}</small>` : ""}<span>${subject.suggestedTeachers?.length ? `${subject.suggestedTeachers.map(item => esc(item.name)).join(" · ")}` : "טרם זוהו מורות"}</span><button class="text-button" data-open-subject="${esc(subject.id)}" type="button">פתיחת פרויקט</button></article>`).join("") : "<p class=\"empty-note\">טרם נוספו מקצועות.</p>";
-    elements.students.innerHTML = campus.students.length ? campus.students.sort((a, b) => a.fullName.localeCompare(b.fullName, "he")).map(student => `<article class="campus-student"><div><strong>${esc(student.fullName)}</strong><span>${esc(student.grade || "כיתה לא הוגדרה")} · ${student.schedule?.timetable?.length ? "מערכת שעות נקלטה" : "ללא מערכת שעות"}</span></div><small>${student.requests?.length ? esc(student.requests.map(request => `${request.subject}: ${request.hours}`).join(" · ")) : "טרם הוגשו בקשות תגבור"}</small></article>`).join("") : "<p class=\"empty-note\">טרם נקלטו תלמידים למאגר.</p>";
+    elements.students.innerHTML = campus.students.length ? campus.students.sort((a, b) => a.fullName.localeCompare(b.fullName, "he")).map(student => `<article class="campus-student"><div><strong>${esc(student.fullName)}</strong><span>${esc(student.grade || "כיתה לא הוגדרה")} · ${student.schedule?.timetable?.length ? "מערכת שעות נקלטה" : "ללא מערכת שעות"}</span></div><small>${student.requests?.length ? esc(student.requests.map(request => `${request.subject}: ${request.hours}`).join(" · ")) : "טרם הוגשו בקשות תגבור"}</small><button class="text-button" data-edit-requests="${esc(student.id)}" type="button">עריכת זכאויות</button></article>`).join("") : "<p class=\"empty-note\">טרם נקלטו תלמידים למאגר.</p>";
     elements.archives.innerHTML = campus.archives.length ? campus.archives.map(archive => `<article class="archive-row"><div><strong>${esc(archive.school)} · ${esc(archive.year)}</strong><span>${archive.students.length} תלמידים · ${archive.subjects.length} מקצועות</span></div><button class="text-button" data-view-archive="${esc(archive.id)}" type="button">צפייה</button></article>`).join("") : "<p class=\"empty-note\">עדיין לא נשמר צילום של שנה קודמת.</p>";
   }
   function prepareSubjects(names, sourceLabel) {
@@ -142,19 +142,65 @@
   function archiveYear() {
     if (!campus.students.length && !campus.subjects.length) return showToast("אין עדיין נתונים לשמירה בצילום שנתי.");
     if (!confirm(`ליצור צילום לקריאה בלבד של ${campus.school} · ${campus.year}? המאגר הפעיל לא ישתנה.`)) return;
-    campus.archives.unshift({ id: `archive-${Date.now()}`, school: campus.school, year: campus.year, createdAt: new Date().toISOString(), students: structuredClone(campus.students), subjects: structuredClone(campus.subjects) });
+    campus.archives.unshift({ id: `archive-${Date.now()}`, school: campus.school, year: campus.year, createdAt: new Date().toISOString(), students: structuredClone(campus.students), subjects: structuredClone(campus.subjects), assignments: structuredClone(campus.assignments || []) });
     saveCampus(); render(); showToast("צילום סוף השנה נשמר לקריאה בלבד.");
   }
   function viewArchive(id) {
     const archive = campus.archives.find(item => item.id === id); if (!archive) return;
     alert(`${archive.school} · ${archive.year}\n\n${archive.students.length} תלמידים\n${archive.subjects.length} מקצועות\n\nהצילום נשמר לקריאה בלבד.`);
   }
+  function requestRow(request = { subject: "", hours: 1 }) {
+    return `<div class="request-row"><label><span>מקצוע</span><input data-campus-request-subject value="${esc(request.subject)}" list="campusSubjects" /></label><label><span>שעות</span><input data-campus-request-hours type="number" min="1" max="20" value="${Number(request.hours) || 1}" /></label><button class="text-button" data-remove-campus-request type="button">הסרה</button></div>`;
+  }
+  function openRequests(studentId) {
+    const student = campus.students.find(item => item.id === studentId); if (!student) return;
+    elements.requestsDialog.dataset.studentId = studentId;
+    elements.requestsTitle.textContent = `זכאויות — ${student.fullName}`;
+    elements.requestRows.innerHTML = `<datalist id="campusSubjects">${campus.subjects.map(subject => `<option value="${esc(subject.name)}"></option>`).join("")}</datalist>${(student.requests?.length ? student.requests : [{ subject: "", hours: 1 }]).map(requestRow).join("")}`;
+    elements.requestsDialog.showModal();
+  }
+  function saveRequests() {
+    const student = campus.students.find(item => item.id === elements.requestsDialog.dataset.studentId); if (!student) return;
+    const requests = [...elements.requestRows.querySelectorAll(".request-row")].map(row => ({ subject: clean(row.querySelector("[data-campus-request-subject]").value), hours: Number(row.querySelector("[data-campus-request-hours]").value) })).filter(request => request.subject || request.hours);
+    if (!requests.length || requests.some(request => !request.subject || !Number.isInteger(request.hours) || request.hours < 1)) return showToast("יש למלא מקצוע ומספר שעות תקין בכל שורה.");
+    if (new Set(requests.map(request => key(request.subject))).size !== requests.length) return showToast("אותו מקצוע מופיע יותר מפעם אחת.");
+    student.requests = requests; requests.forEach(request => addSubject(request.subject));
+    saveCampus(); elements.requestsDialog.close(); render(); showToast("הזכאויות נשמרו במאגר.");
+  }
+  function exportCampus() {
+    const backup = { kind: "differential-campus-backup", schemaVersion: 1, exportedAt: new Date().toISOString(), campus };
+    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" })); link.download = `מאגר-${campus.school || "תיכון"}-${campus.year || "ללא-שנה"}.json`; link.click(); URL.revokeObjectURL(link.href); showToast("גיבוי מלא של המאגר הורד למחשב.");
+  }
+  async function restoreCampus(file) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data?.kind !== "differential-campus-backup" || !data.campus || !Array.isArray(data.campus.students) || !Array.isArray(data.campus.subjects)) throw new Error("זה אינו קובץ גיבוי תקין של מאגר התיכון.");
+      const next = { ...defaultCampus(), ...data.campus, students: data.campus.students, subjects: data.campus.subjects, assignments: Array.isArray(data.campus.assignments) ? data.campus.assignments : [], archives: Array.isArray(data.campus.archives) ? data.campus.archives : [] };
+      const preview = `תצוגה מקדימה לשחזור:\n${next.school || "ללא שם"} · ${next.year || "ללא שנה"}\n${next.students.length} תלמידים, ${next.subjects.length} מקצועות ו־${next.assignments.length} שיבוצים דיפרנציאליים.\n\nהמאגר המקומי הנוכחי יוחלף. להמשיך?`;
+      if (!confirm(preview)) return;
+      campus = next; saveCampus(); render(); showToast("הגיבוי שוחזר בהצלחה.");
+    } catch (error) { showToast(error instanceof Error ? error.message : "לא ניתן לשחזר את הקובץ."); }
+    finally { elements.restore.value = ""; }
+  }
+  function globalReport() {
+    const assignmentsByStudent = new Map();
+    (campus.assignments || []).forEach(item => { if (!assignmentsByStudent.has(item.student)) assignmentsByStudent.set(item.student, []); assignmentsByStudent.get(item.student).push(item); });
+    const rows = campus.students.map(student => { const lessons = (assignmentsByStudent.get(student.fullName) || []).sort((a, b) => a.day.localeCompare(b.day, "he") || a.period - b.period); return `<tr><td>${esc(student.fullName)}</td><td>${esc(student.grade || "—")}</td><td>${esc((student.requests || []).map(request => `${request.subject}: ${request.hours}`).join(" · ") || "—")}</td><td>${lessons.length ? lessons.map(item => `${esc(item.subject || "מקצוע")} · ${esc(item.day)} ${item.period} · ${esc(item.teacher)}`).join("<br>") : "טרם שובץ"}</td></tr>`; }).join("");
+    const report = window.open("", "_blank"); if (!report) return showToast("הדפדפן חסם את פתיחת הדו״ח.");
+    report.document.write(`<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><title>דו״ח כולל</title><style>@page{size:A4 landscape;margin:12mm}body{font:14px Arial;color:#17345f}h1{margin:0 0 5px}p{color:#607287}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border:1px solid #cfd9e6;text-align:right;vertical-align:top}th{background:#1f4d7b;color:#fff}@media print{button{display:none}}</style><body><button onclick="print()">הדפסה או שמירה כ־PDF</button><h1>דו״ח דיפרנציאלי כולל</h1><p>${esc(campus.school)} · ${esc(campus.year)}</p><table><thead><tr><th>תלמיד/ה</th><th>כיתה</th><th>זכאויות</th><th>שיבוצים בכל המקצועות</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); report.document.close();
+  }
   elements.save.addEventListener("click", () => { const school = clean(elements.school.value); const year = clean(elements.year.value); if (!school || !year) return showToast("יש למלא את שם התיכון ואת שנת הלימודים."); campus.school = school; campus.year = year; saveCampus(); render(); showToast("מאגר התיכון הוגדר ונשמר."); });
   elements.manualForm.addEventListener("submit", event => { event.preventDefault(); const name = clean(elements.manualName.value); if (!name) return showToast("יש להזין שם מקצוע."); addSubject(name, split(elements.manualAliases.value)); saveCampus(); elements.manualName.value = ""; elements.manualAliases.value = ""; render(); showToast("המקצוע נוסף למאגר."); });
   elements.listForm.addEventListener("submit", event => { event.preventDefault(); const values = split(elements.list.value); if (!values.length) return showToast("הדביקו לפחות מקצוע אחד."); prepareSubjects(values, "הצעת מקצועות מהרשימה"); });
   elements.scan.addEventListener("click", scanSchedules); elements.archive.addEventListener("click", archiveYear);
+  elements.report.addEventListener("click", globalReport); elements.export.addEventListener("click", exportCampus); elements.restore.addEventListener("change", event => restoreCampus(event.target.files[0]));
+  elements.students.addEventListener("click", event => { const button = event.target.closest("[data-edit-requests]"); if (button) openRequests(button.dataset.editRequests); });
+  elements.addRequestRow.addEventListener("click", () => elements.requestRows.insertAdjacentHTML("beforeend", requestRow()));
+  elements.requestRows.addEventListener("click", event => { const button = event.target.closest("[data-remove-campus-request]"); if (button && elements.requestRows.querySelectorAll(".request-row").length > 1) button.closest(".request-row").remove(); });
+  elements.saveRequests.addEventListener("click", saveRequests);
   elements.subjectList.addEventListener("click", event => { const button = event.target.closest("[data-open-subject]"); if (!button) return; const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return; localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] })); location.href = "setup.html"; });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=14").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=15").catch(() => {});
 })();

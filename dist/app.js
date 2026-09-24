@@ -282,9 +282,9 @@
   function loadCampusStore() {
     try {
       const stored = JSON.parse(localStorage.getItem(campusStorageKey));
-      if (stored && typeof stored === "object") return { ...stored, students: Array.isArray(stored.students) ? stored.students : [], subjects: Array.isArray(stored.subjects) ? stored.subjects : [], archives: Array.isArray(stored.archives) ? stored.archives : [] };
+      if (stored && typeof stored === "object") return { ...stored, students: Array.isArray(stored.students) ? stored.students : [], subjects: Array.isArray(stored.subjects) ? stored.subjects : [], assignments: Array.isArray(stored.assignments) ? stored.assignments : [], archives: Array.isArray(stored.archives) ? stored.archives : [] };
     } catch (_) { /* The project registry remains available on its own. */ }
-    return { schemaVersion: 1, school: projectMeta.school || "", year: projectMeta.year || "", students: [], subjects: [], archives: [] };
+    return { schemaVersion: 1, school: projectMeta.school || "", year: projectMeta.year || "", students: [], subjects: [], assignments: [], archives: [] };
   }
 
   function loadUndoHistory() {
@@ -390,7 +390,28 @@
   }
 
   function saveAssignments() {
-    if (safeLocalSet(storageKey, JSON.stringify(assignments))) markSaved();
+    const localSaved = safeLocalSet(storageKey, JSON.stringify(assignments));
+    const campusSaved = syncCampusAssignments();
+    if (localSaved || campusSaved) markSaved();
+  }
+
+  function syncCampusAssignments() {
+    const currentProjectAssignments = assignments.map(item => ({ ...item, campusProjectId: projectId, subject: projectMeta.subject, subjectAliases: projectMeta.aliases || [], updatedAt: new Date().toISOString() }));
+    campusStore.assignments = [...(campusStore.assignments || []).filter(item => item.campusProjectId !== projectId), ...currentProjectAssignments];
+    campusStore.school = campusStore.school || projectMeta.school || "";
+    campusStore.year = campusStore.year || projectMeta.year || "";
+    campusStore.updatedAt = new Date().toISOString();
+    return safeLocalSet(campusStorageKey, JSON.stringify(campusStore));
+  }
+
+  function externalDifferentialAt({ student = null, teacher = null, day, period }) {
+    return (campusStore.assignments || []).find(item => item.campusProjectId !== projectId && item.day === day && item.period === period && ((student && item.student === student) || (teacher && item.teacher === teacher))) || null;
+  }
+
+  function differentialForDisplay({ student = null, teacher = null, day, period }) {
+    const current = assignments.find(item => item.day === day && item.period === period && ((student && item.student === student) || (teacher && item.teacher === teacher)));
+    if (current) return { ...current, subject: projectMeta.subject };
+    return (campusStore.assignments || []).find(item => item.day === day && item.period === period && ((student && item.student === student) || (teacher && item.teacher === teacher))) || null;
   }
 
   function saveConstraints() {
@@ -540,6 +561,10 @@
 
     assignments.forEach(item => {
       if (item.period > MAX_SCHEDULING_PERIOD) hardErrors.push(`השיבוץ של ${item.student} נקבע אחרי תקרת השיבוץ (שעה ${MAX_SCHEDULING_PERIOD})`);
+      const otherStudentDifferential = externalDifferentialAt({ student: item.student, day: item.day, period: item.period });
+      const otherTeacherDifferential = externalDifferentialAt({ teacher: item.teacher, day: item.day, period: item.period });
+      if (otherStudentDifferential) hardErrors.push(`השיבוץ של ${item.student} מתנגש עם דיפרנציאלי ב${otherStudentDifferential.subject || "מקצוע אחר"}`);
+      if (otherTeacherDifferential) hardErrors.push(`השיבוץ של ${item.teacher} מתנגש עם דיפרנציאלי ב${otherTeacherDifferential.subject || "מקצוע אחר"}`);
       if (!candidateForStudent(item.student, item.day, item.period)) hardErrors.push(`השעה של ${item.student} אינה אפשרית לפי מערכת התלמיד/ה`);
       const teacherSlot = teacherData.get(item.teacher)?.candidates.find(candidate => candidate.day === item.day && candidate.period === item.period);
       if (!teacherSlot) hardErrors.push(`המועד אינו זמין במערכת של ${item.teacher}`);
@@ -1027,6 +1052,7 @@
     studentSlotsForOptions(studentName, currentId).forEach(studentSlot => {
       const slotKey = `${studentSlot.day}-${studentSlot.period}`;
       if (occupiedByStudent.has(slotKey)) return;
+      if (externalDifferentialAt({ student: studentName, day: studentSlot.day, period: studentSlot.period })) return;
       if (!includeEdgePeriods && isEdgePeriod(studentSlot)) return;
       if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
       const registryRecord = studentRegistry.find(record => record.fullName === studentName);
@@ -1034,6 +1060,7 @@
       if (studentSlot.period > projectMeta.lastPeriod) return;
       teacherData.forEach((teacher, teacherName) => {
         if (!teacherAllows(teacherName, studentName)) return;
+        if (externalDifferentialAt({ teacher: teacherName, day: studentSlot.day, period: studentSlot.period })) return;
         if ((teacher.forbidden_periods || []).includes(studentSlot.period)) return;
         if (isConstrained("teacher", teacherName, studentSlot.day, studentSlot.period)) return;
         const teacherSlot = teacher.candidates.find(item => item.day === studentSlot.day && item.period === studentSlot.period);
@@ -1812,13 +1839,15 @@
 
   function renderShadowSchedule() {
     if (!shadowSchedule) return;
+    const studentName = studentRegistry.find(item => item.id === activeRegistryStudentId)?.fullName || elements.registryStudentName.value.trim();
     const cells = [`<div class="shadow-grid-head">שעה</div>`, ...days.map(day => `<div class="shadow-grid-head">${esc(day)}</div>`)];
     for (let period = 0; period <= 9; period += 1) {
       cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(times[period])}</small></div>`);
       days.forEach(day => {
         const state = shadowSchedule[shadowSlotKey(day, period)] || "free";
-        const label = state === "blocked" ? "חסום" : state === "subject" ? "שיעור מקצוע" : "חלון פנוי";
-        cells.push(`<button class="shadow-cell ${state}" data-shadow-day="${esc(day)}" data-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${state === "subject" ? "מקצוע" : state === "blocked" ? "חסום" : ""}</span></button>`);
+        const differential = studentName ? differentialForDisplay({ student: studentName, day, period }) : null;
+        const label = differential ? `דיפרנציאלי — ${differential.subject || "מקצוע אחר"}` : state === "blocked" ? "חסום" : state === "subject" ? "שיעור מקצוע" : "חלון פנוי";
+        cells.push(`<button class="shadow-cell ${state}${differential ? " differential" : ""}" data-shadow-day="${esc(day)}" data-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${esc(label)}"><span>${differential ? `דיפ׳ · ${esc(differential.subject || "מקצוע")}` : state === "subject" ? "מקצוע" : state === "blocked" ? "חסום" : ""}</span></button>`);
       });
     }
     elements.shadowScheduleGrid.innerHTML = cells.join("");
@@ -1838,6 +1867,8 @@
     const day = button.dataset.shadowDay;
     const period = Number(button.dataset.shadowPeriod);
     if (!days.includes(day) || !Number.isInteger(period)) return;
+    const studentName = studentRegistry.find(item => item.id === activeRegistryStudentId)?.fullName || elements.registryStudentName.value.trim();
+    if (studentName && differentialForDisplay({ student: studentName, day, period })) return showToast("שעה דיפרנציאלית נוצרת משיבוץ קיים ואי אפשר לצבוע אותה ידנית.");
     const key = shadowSlotKey(day, period);
     if (shadowPaintedSlots.has(key)) return;
     shadowPaintedSlots.add(key);
@@ -1902,8 +1933,9 @@
       cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(times[period])}</small></div>`);
       days.forEach(day => {
         const state = teacherShadowSchedule[shadowSlotKey(day, period)] || "free";
-        const label = state === "blocked" ? "חסום" : state === "fixed" ? "שיעור קבוע" : state === "flexible" ? "שעה גמישה" : "פנויה";
-        cells.push(`<button class="shadow-cell teacher-${state}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${state === "fixed" ? "קבוע" : state === "flexible" ? "גמיש" : state === "blocked" ? "חסום" : ""}</span></button>`);
+        const differential = activeTeacherEditorName ? differentialForDisplay({ teacher: activeTeacherEditorName, day, period }) : null;
+        const label = differential ? `דיפרנציאלי — ${differential.subject || "מקצוע אחר"}` : state === "blocked" ? "חסום" : state === "fixed" ? "שיעור קבוע" : state === "flexible" ? "שעה גמישה" : "פנויה";
+        cells.push(`<button class="shadow-cell teacher-${state}${differential ? " differential" : ""}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${esc(label)}"><span>${differential ? `דיפ׳ · ${esc(differential.subject || "מקצוע")}` : state === "fixed" ? "קבוע" : state === "flexible" ? "גמיש" : state === "blocked" ? "חסום" : ""}</span></button>`);
       });
     }
     elements.teacherShadowGrid.innerHTML = cells.join("");
@@ -1918,6 +1950,7 @@
     const day = button.dataset.teacherShadowDay;
     const period = Number(button.dataset.teacherShadowPeriod);
     if (!days.includes(day) || !Number.isInteger(period)) return;
+    if (activeTeacherEditorName && differentialForDisplay({ teacher: activeTeacherEditorName, day, period })) return showToast("שעה דיפרנציאלית נוצרת משיבוץ קיים ואי אפשר לצבוע אותה ידנית.");
     const key = shadowSlotKey(day, period);
     if (teacherShadowPaintedSlots.has(key)) return;
     teacherShadowPaintedSlots.add(key);
@@ -2833,11 +2866,13 @@
     saveLocks();
     saveShareWilling();
   }
+  // Every opened project refreshes its movable differential layer in the shared campus repository.
+  syncCampusAssignments();
   updateBackupMessage();
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=14").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=15").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
