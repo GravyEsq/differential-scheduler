@@ -276,6 +276,7 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .swap-edge-toggle { display: flex; align-items: center; gap: 8px; width: fit-content; margin-top: 12px; color: var(--ink); font-size: .82rem; font-weight: 650; cursor: pointer; }
 .swap-edge-toggle input { width: 16px; height: 16px; accent-color: var(--blue); }
 .edit-edge-toggle { margin: 12px 22px 0; }
+.scheduler-edge-toggle { margin: 0; }
 .swap-suggestions { max-height: min(54vh, 520px); padding: 14px 22px 2px; overflow-y: auto; }
 .swap-card { margin-bottom: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfe; }
 .swap-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

@@ -100,9 +100,11 @@
     addStudentSelect: document.querySelector("#addStudentSelect"),
     addStudentStatus: document.querySelector("#addStudentStatus"),
     addOptionSelect: document.querySelector("#addOptionSelect"),
+    addShowEdges: document.querySelector("#addShowEdges"),
     addDialogNote: document.querySelector("#addDialogNote"),
     addAssignmentButton: document.querySelector("#addAssignmentButton"),
     recalculateDialog: document.querySelector("#recalculateDialog"),
+    recalculateShowEdges: document.querySelector("#recalculateShowEdges"),
     recalculateSummary: document.querySelector("#recalculateSummary"),
     applySchedulePlanButton: document.querySelector("#applySchedulePlanButton"),
     swapDialog: document.querySelector("#swapDialog"),
@@ -113,6 +115,7 @@
     locksList: document.querySelector("#locksList"),
     shareDialog: document.querySelector("#shareDialog"),
     shareWillingList: document.querySelector("#shareWillingList"),
+    shareShowEdges: document.querySelector("#shareShowEdges"),
     shareSuggestions: document.querySelector("#shareSuggestions"),
     constraintsDialog: document.querySelector("#constraintsDialog"),
     constraintsList: document.querySelector("#constraintsList"),
@@ -462,14 +465,18 @@
   }
 
   function missingExplanation(student) {
-    const availability = studentSlotsForOptions(student.student);
-    if (!availability.length) return "לא הוגדרו לתלמיד/ה שעות זמינות במערכת האישית.";
+    const includeEdgePeriods = elements.recalculateShowEdges.checked;
+    const allAvailability = studentSlotsForOptions(student.student);
+    if (!allAvailability.length) return "לא הוגדרו לתלמיד/ה שעות זמינות במערכת האישית.";
+    const availability = allAvailability.filter(slot => includeEdgePeriods || !isEdgePeriod(slot));
+    if (!availability.length) return "המערכת האישית מאפשרת רק שעות קצה. סמנו „לכלול קצוות יום” לפני הפעלת סידור המערכת.";
     const matchingTeacherSlots = availability.filter(slot => [...teacherData.values()].some(teacher => teacherAllows(teacher.name, student.student) && teacher.candidates.some(candidate => candidate.day === slot.day && candidate.period === slot.period)));
     if (!matchingTeacherSlots.length) return "אין חפיפה בין השעות האפשריות של התלמיד/ה לבין זמינות של מורה מתאימה.";
-    const legal = legalOptionsForStudent(student.student);
+    const legal = legalOptionsForStudent(student.student, null, { includeEdgePeriods });
     if (legal.length) return `נמצאו ${legal.length} אפשרויות חוקיות; לחצו על „הוספת שעה” או על „סידור מערכת” כדי לבחור ביניהן.`;
-    const withQuotaException = legalOptionsForStudent(student.student, null, { includeOverQuota: true });
+    const withQuotaException = legalOptionsForStudent(student.student, null, { includeOverQuota: true, includeEdgePeriods });
     if (withQuotaException.length) return "יש חפיפה בשעות, אך כל האפשרויות חורגות מהמכסה שהוגדרה למורות.";
+    if (!includeEdgePeriods && legalOptionsForStudent(student.student, null, { includeEdgePeriods: true }).length) return "קיימות אפשרויות רק בשעות קצה. סמנו „לכלול קצוות יום” לפני הפעלת סידור המערכת.";
     return "קיימת חפיפת שעות, אך כל האפשרויות נחסמות כרגע בגלל שיבוצים קיימים, נעילות או אילוצי רצף.";
   }
 
@@ -793,8 +800,16 @@
     return Boolean(teacherData.get(teacherName)?.exclude_from_swap_suggestions);
   }
 
+  function isEdgePeriod(item) {
+    return item?.period === 0 || item?.period === 8;
+  }
+
+  function nonEdgeFirst(items, edgeTest = isEdgePeriod) {
+    return [...items].sort((first, second) => Number(edgeTest(first)) - Number(edgeTest(second)));
+  }
+
   function hasSwapEdgePeriod(suggestion) {
-    return [...suggestion.firstDestinations, ...suggestion.secondDestinations].some(item => item.period === 0 || item.period === 8);
+    return [...suggestion.firstDestinations, ...suggestion.secondDestinations].some(isEdgePeriod);
   }
 
   function quotaWarningsForSwap(teacherNames) {
@@ -865,7 +880,7 @@
 
   function renderSwapSuggestions() {
     const studentName = elements.swapStudentSelect.value;
-    const suggestions = findSwapSuggestions(studentName)
+    const suggestions = nonEdgeFirst(findSwapSuggestions(studentName), hasSwapEdgePeriod)
       .filter(item => elements.swapShowEdges.checked || !hasSwapEdgePeriod(item));
     elements.swapSuggestions._items = suggestions;
     if (!suggestions.length) {
@@ -979,7 +994,7 @@
     return maxConsecutive(periods) <= limit;
   }
 
-  function legalOptionsForStudent(studentName, currentAssignment = null, { includeOverQuota = false } = {}) {
+  function legalOptionsForStudent(studentName, currentAssignment = null, { includeOverQuota = false, includeEdgePeriods = true } = {}) {
     const student = studentData.get(studentName);
     if (!student) return [];
     const currentId = currentAssignment?.id || null;
@@ -993,6 +1008,7 @@
     studentSlotsForOptions(studentName, currentId).forEach(studentSlot => {
       const slotKey = `${studentSlot.day}-${studentSlot.period}`;
       if (occupiedByStudent.has(slotKey)) return;
+      if (!includeEdgePeriods && isEdgePeriod(studentSlot)) return;
       if (isConstrained("student", studentName, studentSlot.day, studentSlot.period)) return;
       const registryRecord = studentRegistry.find(record => record.fullName === studentName);
       if (registryRecord?.exceptions?.noPeriodZero && studentSlot.period === 0) return;
@@ -1101,9 +1117,8 @@
 
   function renderEditorAlternatives() {
     const allOptions = elements.alternativeSelect._allOptions || [];
-    const options = allOptions
-      .filter(option => elements.editShowEdges.checked || (option.period !== 0 && option.period !== 8))
-      .sort((first, second) => Number(first.period === 0 || first.period === 8) - Number(second.period === 0 || second.period === 8));
+    const options = nonEdgeFirst(allOptions)
+      .filter(option => elements.editShowEdges.checked || !isEdgePeriod(option));
     elements.alternativeSelect.innerHTML = options.map((option, index) => `<option value="${index}">${esc(optionLabel(option))}</option>`).join("");
     elements.alternativeSelect._options = options;
     elements.saveMoveButton.disabled = options.length === 0;
@@ -1155,6 +1170,7 @@
     }).join("");
     if (preselectedStudent && names.includes(preselectedStudent)) elements.addStudentSelect.value = preselectedStudent;
     else if (missing.size) elements.addStudentSelect.value = names.find(name => missing.has(name));
+    elements.addShowEdges.checked = false;
     refreshAddDialog();
     elements.addDialog.showModal();
   }
@@ -1166,12 +1182,15 @@
     const assigned = lessonsForStudent(studentName).length;
     const missing = Math.max(0, student.required - assigned);
     elements.addStudentStatus.innerHTML = `<strong>מצב נוכחי:</strong> ${assigned} מתוך ${student.required} שעות משובצות${missing ? ` · חסרות ${missing}` : " · הזכאות מלאה"}.`;
-    const options = legalOptionsForStudent(studentName);
+    const allOptions = legalOptionsForStudent(studentName);
+    const options = nonEdgeFirst(allOptions).filter(option => elements.addShowEdges.checked || !isEdgePeriod(option));
     elements.addOptionSelect.innerHTML = options.map((option, index) => `<option value="${index}">${esc(optionLabel(option))}</option>`).join("");
     elements.addOptionSelect._options = options;
     elements.addAssignmentButton.disabled = options.length === 0;
     if (!options.length) {
-      elements.addDialogNote.textContent = "לא נמצא מועד זמין שמתאים לאילוצי התלמיד/ה והצוות.";
+      elements.addDialogNote.textContent = allOptions.length
+        ? "כל המועדים הזמינים הם בשעות קצה. סמנו „הצגת קצוות יום” כדי לראות אותם."
+        : "לא נמצא מועד זמין שמתאים לאילוצי התלמיד/ה והצוות.";
       return;
     }
     updateAddDialogNote();
@@ -1332,6 +1351,7 @@
   }
 
   function buildSchedulePlan() {
+    const includeEdgePeriods = elements.recalculateShowEdges.checked;
     const originalAssignments = assignments;
     const repaired = assignmentsToRepair();
     const repairedIds = new Set(repaired.map(({ item }) => item.id));
@@ -1359,7 +1379,7 @@
       let chosen = null;
       pending.forEach((studentName, index) => {
         if (chosen?.options.length === 0) return;
-        const options = legalOptionsForStudent(studentName);
+        const options = legalOptionsForStudent(studentName, null, { includeEdgePeriods });
         if (!chosen || options.length < chosen.options.length || (options.length === chosen.options.length && studentName.localeCompare(chosen.studentName, "he") < 0)) {
           chosen = { studentName, index, options };
         }
@@ -1459,6 +1479,7 @@
       .sort((a, b) => a.student.localeCompare(b.student, "he"))
       .map(student => `<label class="share-toggle"><input type="checkbox" data-share-student="${esc(student.student)}" ${shareWilling[student.student] ? "checked" : ""}><span><strong>${esc(student.student)}</strong><small>${esc(student.grade)}</small></span></label>`)
       .join("");
+    elements.shareShowEdges.checked = false;
     renderShareSuggestions();
     elements.shareDialog.showModal();
   }
@@ -1493,16 +1514,19 @@
         suggestions.push({ host, partner: student, candidate, quality: candidateQuality(candidate) });
       });
     });
-    return suggestions.sort((a, b) => a.quality - b.quality || days.indexOf(a.host.day) - days.indexOf(b.host.day) || a.host.period - b.host.period || a.partner.student.localeCompare(b.partner.student, "he")).slice(0, 30);
+    return suggestions.sort((a, b) => a.quality - b.quality || days.indexOf(a.host.day) - days.indexOf(b.host.day) || a.host.period - b.host.period || a.partner.student.localeCompare(b.partner.student, "he"));
   }
 
   function renderShareSuggestions() {
-    const suggestions = findShareSuggestions();
+    const allSuggestions = findShareSuggestions();
+    const suggestions = nonEdgeFirst(allSuggestions, item => isEdgePeriod(item.host))
+      .filter(item => elements.shareShowEdges.checked || !isEdgePeriod(item.host))
+      .slice(0, 30);
     elements.shareSuggestions._items = suggestions;
     elements.shareSuggestions.innerHTML = suggestions.length ? suggestions.map((item, index) => {
       const note = item.candidate.category === "חלון" ? "ניצול שעת חלון" : item.candidate.category === "שיעור במקצוע" ? "בזמן שיעור המקצוע" : "מחוץ למערכת הרגילה";
       return `<article class="share-card"><div><strong>${esc(item.host.student)} + ${esc(item.partner.student)}</strong><span>${esc(item.host.teacher)} · ${esc(item.host.day)}, שעה ${item.host.period} · ${esc(note)}</span></div><button class="primary-button" data-share-index="${index}" type="button">אישור השיבוץ</button></article>`;
-    }).join("") : `<div class="swap-empty"><strong>אין כרגע הצעה לשיבוץ זוגי.</strong><br>יש לסמן לפחות שני תלמידים, ולפחות לאחד מהם צריכה להיות שעת זכאות שטרם שובצה ומתאימה למועד קיים של האחר.</div>`;
+    }).join("") : `<div class="swap-empty"><strong>${allSuggestions.length ? "כל ההצעות הזמינות הן בשעות קצה." : "אין כרגע הצעה לשיבוץ זוגי."}</strong><br>${allSuggestions.length ? "סמנו „הצגת קצוות יום” כדי לראות אותן." : "יש לסמן לפחות שני תלמידים, ולפחות לאחד מהם צריכה להיות שעת זכאות שטרם שובצה ומתאימה למועד קיים של האחר."}</div>`;
   }
 
   function applyShareSuggestion(suggestion) {
@@ -2641,7 +2665,9 @@
   document.querySelector("#manualButton").addEventListener("click", () => openAddDialog());
   document.querySelector("#recalculateButton").addEventListener("click", recalculateMissingAssignments);
   elements.applySchedulePlanButton.addEventListener("click", applySchedulePlan);
+  elements.recalculateShowEdges.addEventListener("change", renderAll);
   elements.addStudentSelect.addEventListener("change", refreshAddDialog);
+  elements.addShowEdges.addEventListener("change", refreshAddDialog);
   elements.addOptionSelect.addEventListener("change", updateAddDialogNote);
   elements.addAssignmentButton.addEventListener("click", addAssignment);
   document.querySelector("#managementMenuButton").addEventListener("click", openManagementDialog);
@@ -2701,6 +2727,7 @@
   elements.ruleTeacher.addEventListener("change", refreshTeacherRules);
   document.querySelector("#saveTeacherRulesButton").addEventListener("click", saveTeacherRules);
   document.querySelector("#saveShareWillingButton").addEventListener("click", commitShareWilling);
+  elements.shareShowEdges.addEventListener("change", renderShareSuggestions);
   elements.shareSuggestions.addEventListener("click", event => {
     const button = event.target.closest("[data-share-index]");
     if (button) applyShareSuggestion(elements.shareSuggestions._items?.[Number(button.dataset.shareIndex)]);
@@ -2793,7 +2820,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=11").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=12").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();

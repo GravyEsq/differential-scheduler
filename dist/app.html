@@ -109,6 +109,7 @@
           </div>
           <div class="side-actions">
             <button id="recalculateButton" class="primary-button" type="button" title="בדיקת אילוצים והשלמת שעות חסרות באופן אוטומטי">סידור מערכת</button>
+            <label class="swap-edge-toggle scheduler-edge-toggle"><input id="recalculateShowEdges" type="checkbox" /> <span>לכלול קצוות יום (שעות 0 ו־8)</span></label>
             <div class="quick-actions">
               <button id="manualButton" class="secondary-button" type="button" title="בחירת תלמיד, מורה ומועד באופן ידני">שיבוץ ידני</button>
               <button id="reportButton" class="secondary-button" type="button" title="פתיחת דו״ח שיבוצים להדפסה או לשמירה כקובץ PDF">הפקת דו״ח</button>
@@ -170,6 +171,7 @@
           <span>בחירת מורה ומועד</span>
           <select id="addOptionSelect"></select>
         </label>
+        <label class="swap-edge-toggle edit-edge-toggle"><input id="addShowEdges" type="checkbox" /> <span>הצגת קצוות יום (שעות 0 ו־8)</span></label>
         <p id="addDialogNote" class="dialog-note"></p>
         <div class="dialog-actions">
           <button id="addAssignmentButton" class="primary-button" type="button">יצירת השיבוץ</button>
@@ -274,6 +276,7 @@
         <p class="locks-intro">סמנו תלמידים שהסכימו לשיבוץ זוגי. המערכת תציע רק צמדים מתאימים שעומדים באילוצי הזמינות.</p>
         <div id="shareWillingList" class="share-willing-list"></div>
         <div class="share-suggestions-head"><h3>הצעות לשיבוץ זוגי</h3><span>כל הצעה מחייבת אישור</span></div>
+        <label class="swap-edge-toggle edit-edge-toggle"><input id="shareShowEdges" type="checkbox" /> <span>הצגת קצוות יום (שעות 0 ו־8)</span></label>
         <div id="shareSuggestions" class="swap-suggestions" aria-live="polite"></div>
         <div class="dialog-actions">
           <button id="saveShareWillingButton" class="primary-button" type="button">שמירת העדפות ועדכון הצעות</button>
