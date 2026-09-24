@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="יצירת פרויקט חדש לשיבוץ שעות דיפרנציאליות" />
+    <meta name="description" content="פתיחת מקצוע חדש לשיבוץ שעות דיפרנציאליות" />
     <meta name="theme-color" content="#183b65" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <title>פרויקט שיבוץ חדש</title>
+    <title>פתיחת מקצוע חדש</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="setup-page">
-    <a class="skip-link" href="#projectForm">דילוג להגדרת הפרויקט</a>
+    <a class="skip-link" href="#projectForm">דילוג להגדרת המקצוע</a>
     <header class="topbar setup-topbar">
       <div>
         <p class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
-        <h1>יצירת פרויקט חדש</h1>
+        <h1>פתיחת מקצוע חדש</h1>
       </div>
       <a class="new-project-link" href="app.html">חזרה למערכת</a>
     </header>
@@ -26,11 +26,11 @@
 
         <section class="wizard-step active" data-step="0">
           <p class="eyebrow dark">התחלה</p>
-          <h2>איזה פרויקט נפתח?</h2>
-          <p>נבקש עכשיו רק את הפרטים שנחוצים כדי להתחיל.</p>
+          <h2>איזה מקצוע רוצים לשבץ?</h2>
+          <p>נבקש עכשיו רק את שם המקצוע. את התיכון ושנת הלימודים אפשר לעדכן אחר כך.</p>
           <div class="wizard-fields">
             <label><span>מקצוע</span><input id="subjectInput" required autofocus placeholder="לדוגמה: ביולוגיה" /></label>
-            <label><span>בית הספר</span><input id="schoolInput" required placeholder="שם בית הספר" /></label>
+            <input id="schoolInput" type="hidden" />
           </div>
           <div id="campusProjectHint" class="recommended-path" hidden></div>
         </section>
@@ -38,8 +38,8 @@
         <section class="wizard-step" data-step="1" hidden>
           <p class="eyebrow dark">תלמידים</p>
           <h2>איך נקלוט את התלמידים?</h2>
-          <p>הדרך הפשוטה היא לפתוח את הפרויקט ולהוסיף כל תלמיד במסך מונחה, יחד עם הסל האישי ומערכת השעות שלו.</p>
-          <div class="recommended-path"><span aria-hidden="true">✓</span><div><strong>מומלץ: קליטה מונחית מתוך מאגר התלמידים</strong><p>אין צורך להכין קובץ מראש. אפשר להמשיך עכשיו ולהוסיף תלמידים אחד־אחד לאחר פתיחת הפרויקט.</p></div></div>
+          <p>המערכות והתלמידים כבר נמצאים במאגר התיכון? אין צורך לעשות כאן דבר. אפשר פשוט להמשיך.</p>
+          <div class="recommended-path"><span aria-hidden="true">✓</span><div><strong>מומלץ: מאגר התיכון</strong><p>שם קולטים תלמידים ומערכות פעם אחת, ואז פותחים את המקצוע הרצוי.</p></div></div>
           <details class="advanced-import">
             <summary>יש לי כבר גיליון מסודר — ייבוא מתקדם</summary>
             <div class="wizard-upload">
@@ -84,7 +84,7 @@
 
         <section class="wizard-step" data-step="3" hidden>
           <p class="eyebrow dark">בדיקה אחרונה</p>
-          <h2>הכול מוכן לפתיחת הפרויקט?</h2>
+          <h2>הכול מוכן לפתיחת המקצוע?</h2>
           <div id="setupReview" class="setup-review">עוד רגע נסכם את הנתונים.</div>
         </section>
 
@@ -97,7 +97,7 @@
         <div class="wizard-actions">
           <button id="wizardBackButton" class="secondary-button" type="button" hidden>חזרה</button>
           <button id="wizardNextButton" class="primary-button" type="button">המשך</button>
-          <button id="createProjectButton" class="primary-button" type="submit" hidden disabled>פתיחת הפרויקט</button>
+          <button id="createProjectButton" class="primary-button" type="submit" hidden disabled>פתיחת מסך השיבוץ</button>
         </div>
       </form>
       <p class="privacy-note">הנתונים נקראים ונשמרים במכשיר הזה בלבד ואינם נשלחים לשרת.</p>

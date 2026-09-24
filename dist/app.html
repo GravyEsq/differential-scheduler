@@ -14,11 +14,11 @@
     <header class="topbar">
       <div>
         <p id="projectEyebrow" class="eyebrow">מערכת שיבוצים דיפרנציאליים</p>
-        <h1 id="projectTitle">פרויקט חדש</h1>
+        <h1 id="projectTitle">מקצוע חדש</h1>
       </div>
       <div class="topbar-actions">
         <a class="new-project-link" href="campus.html">מרכז התיכון</a>
-        <a class="new-project-link" href="setup.html">פרויקט חדש</a>
+        <a class="new-project-link" href="setup.html">מקצוע חדש</a>
         <button id="privacyButton" class="privacy-badge" type="button">הנתונים נשמרים במכשיר בלבד</button>
         <div class="save-state" aria-live="polite">
           <span class="save-state-dot"></span>
@@ -32,12 +32,12 @@
       <section id="emptyProjectState" class="empty-project-state" hidden>
         <div>
           <p class="eyebrow dark">אין נתונים במערכת</p>
-          <h2>טענו קובץ פרויקט או התחילו פרויקט חדש</h2>
+          <h2>טענו קובץ מקצוע או פתחו מקצוע חדש</h2>
           <p>הנתונים נקראים ונשמרים בדפדפן של המכשיר הזה בלבד. הם אינם נשלחים לאתר או נשמרים בשרת.</p>
         </div>
         <div class="empty-project-actions">
-          <button id="emptyImportButton" class="primary-button" type="button">טעינת קובץ פרויקט</button>
-          <a class="secondary-button button-link" href="setup.html">יצירת פרויקט חדש</a>
+          <button id="emptyImportButton" class="primary-button" type="button">טעינת קובץ מקצוע</button>
+          <a class="secondary-button button-link" href="setup.html">פתיחת מקצוע חדש</a>
         </div>
       </section>
 
@@ -348,7 +348,7 @@
     </dialog>
 
     <dialog id="settingsDialog" class="edit-dialog settings-dialog">
-      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות הפרויקט</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="8" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 8" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
+      <form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">אפשר לשנות בהמשך</p><h2>הגדרות המקצוע</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><div class="settings-form"><label><span>בית הספר</span><input id="settingsSchool" /></label><label><span>שנת לימודים</span><input id="settingsYear" /></label><label><span>שם הצוות</span><input id="settingsTeam" /></label><label><span>המקצוע</span><input id="settingsSubject" /></label><label class="wide-field"><span>שמות חלופיים למקצוע</span><input id="settingsAliases" /></label><label><span>שעה אחרונה מותרת</span><input id="settingsLastPeriod" type="number" min="0" max="8" /></label><label><span>שעות להימנעות</span><input id="settingsAvoidPeriods" placeholder="לדוגמה: 0, 8" /></label></div><div class="dialog-actions"><button id="saveSettingsButton" class="primary-button" type="button">שמירת הגדרות</button><button class="secondary-button" value="cancel">ביטול</button></div></form>
     </dialog>
 
     <dialog id="managementDialog" class="management-dialog">
@@ -356,18 +356,18 @@
         <div class="dialog-head"><div><p class="eyebrow dark">מרכז שליטה</p><h2>ניהול וכלים</h2><p>המערכת נשארת ברקע עד לסגירת החלון.</p></div><button id="closeManagementButton" class="close-button" type="button" aria-label="סגירה">×</button></div>
         <div class="management-grid">
           <button class="management-tile" data-management-action="team" type="button"><i>◉</i><strong>ניהול צוות</strong><span>הוספה, עריכה והסרה של מורות</span></button>
-          <button class="management-tile" data-management-action="students" type="button"><i>●</i><strong>ניהול תלמידים</strong><span>קליטה, עריכה והסרה מהפרויקט</span></button>
-          <button class="management-tile" data-management-action="settings" type="button"><i>⚙</i><strong>הגדרות פרויקט</strong><span>מקצוע, שעות והעדפות כלליות</span></button>
+          <button class="management-tile" data-management-action="students" type="button"><i>●</i><strong>ניהול תלמידים</strong><span>קליטה, עריכה והסרה מהמקצוע</span></button>
+          <button class="management-tile" data-management-action="settings" type="button"><i>⚙</i><strong>הגדרות מקצוע</strong><span>מקצוע, שעות והעדפות כלליות</span></button>
           <button class="management-tile" data-management-action="constraints" type="button"><i>⌁</i><strong>אילוצי זמינות</strong><span>חסימות נקודתיות לתלמידים ולמורות</span></button>
           <button class="management-tile" data-management-action="locks" type="button"><i>⌁</i><strong>שיוכים קבועים</strong><span>נעילת תלמיד או תלמידה למורה</span></button>
           <button class="management-tile" data-management-action="swaps" type="button"><i>⇄</i><strong>הצעות להחלפה</strong><span>בחינת החלפות בין מורות</span></button>
           <button class="management-tile" data-management-action="share" type="button"><i>+</i><strong>שיבוץ זוגי</strong><span>הצעות לשיעורים משותפים</span></button>
-          <button class="management-tile" data-management-action="backup" type="button"><i>⇩</i><strong>הורדת גיבוי</strong><span>שמירת כל נתוני הפרויקט בקובץ</span></button>
-          <button class="management-tile" data-management-action="restore" type="button"><i>⇧</i><strong>שחזור מגיבוי</strong><span>טעינת קובץ פרויקט שמור</span></button>
+          <button class="management-tile" data-management-action="backup" type="button"><i>⇩</i><strong>הורדת גיבוי</strong><span>שמירת כל נתוני המקצוע בקובץ</span></button>
+          <button class="management-tile" data-management-action="restore" type="button"><i>⇧</i><strong>שחזור מגיבוי</strong><span>טעינת קובץ מקצוע שמור</span></button>
           <button class="management-tile danger" data-management-action="clear" type="button"><i>×</i><strong>ניקוי לוח</strong><span>הסרת השיבוצים בלבד</span></button>
           <button class="management-tile muted" data-management-action="reset" type="button"><i>↺</i><strong>שחזור גרסה ראשונית</strong><span>ביטול השינויים המקומיים</span></button>
         </div>
-        <div class="dialog-actions"><button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת הפרויקט</button><button class="secondary-button" data-close-management type="button">חזרה למערכת</button></div>
+        <div class="dialog-actions"><button id="defaultProjectButton" class="text-button" type="button" hidden>סגירת המקצוע</button><button class="secondary-button" data-close-management type="button">חזרה למערכת</button></div>
       </div>
     </dialog>
 

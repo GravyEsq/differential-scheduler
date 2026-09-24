@@ -77,7 +77,7 @@
       if (campus?.school) elements.school.value = campus.school;
     } catch (_) { /* The subject still works without a campus title. */ }
     elements.campusProjectHint.hidden = false;
-    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נבחר מהמאגר</strong><p>אפשר לשנות את הפרטים, או להמשיך לבניית הפרויקט.</p></div>`;
+    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נבחר מהמאגר</strong><p>אפשר לשנות את הפרטים, או להמשיך למסך השיבוץ.</p></div>`;
     const teachers = hint.teachers || [];
     if (!teachers.length) { localStorage.removeItem(newProjectSubjectKey); return; }
     elements.campusTeacherSuggestions.hidden = false;
@@ -594,15 +594,15 @@
 
   function updateReview() {
     const errors = [...state.studentErrors, ...state.teacherErrors, ...crossErrors()];
-    const formReady = Boolean(clean(elements.school.value) && clean(elements.subject.value) && state.teachers?.length && !errors.length);
+    const formReady = Boolean(clean(elements.subject.value) && state.teachers?.length && !errors.length);
     elements.create.disabled = !formReady;
     if (!state.teachers?.length) {
-      elements.review.textContent = "יש להשלים את צוות ההוראה לפני פתיחת הפרויקט.";
+      elements.review.textContent = "יש להשלים את צוות ההוראה לפני פתיחת מסך השיבוץ.";
       return;
     }
     const required = state.students.reduce((sum, item) => sum + item.required, 0);
     const capacity = state.teachers.reduce((sum, item) => sum + item.quota, 0);
-    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים שנקלטו</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת צוות מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">${state.students.length ? "הנתונים תקינים. ניתן להפיק הצעת שיבוץ ראשונית." : "הפרויקט ייפתח ללא תלמידים. אפשר לקלוט אותם אחר כך מתוך מאגר התלמידים."}</p>`}`;
+    elements.review.innerHTML = `<div class="review-summary"><div><strong>${state.students.length}</strong><span>תלמידים שנקלטו</span></div><div><strong>${required}</strong><span>שעות נדרשות</span></div><div><strong>${capacity}</strong><span>מכסת צוות מרבית</span></div></div>${errors.length ? `<ul class="review-errors">${errors.slice(0, 12).map(error => `<li>${esc(error)}</li>`).join("")}${errors.length > 12 ? `<li>ועוד ${errors.length - 12} בעיות</li>` : ""}</ul>` : `<p class="review-note">${state.students.length ? "הנתונים תקינים. ניתן להפיק הצעת שיבוץ ראשונית." : "מסך השיבוץ ייפתח ללא תלמידים. עדיף לקלוט אותם קודם במאגר התיכון."}</p>`}`;
   }
 
   function showStep(index) {
@@ -624,8 +624,8 @@
 
   function canContinue() {
     if (state.step === 0) {
-      if (!clean(elements.subject.value) || !clean(elements.school.value)) {
-        elements.message.textContent = "יש למלא את המקצוע ואת שם בית הספר כדי להמשיך.";
+      if (!clean(elements.subject.value)) {
+        elements.message.textContent = "יש למלא את שם המקצוע כדי להמשיך.";
         elements.form.reportValidity();
         return false;
       }
@@ -689,7 +689,7 @@
       window.name = `differential-project:${serialized}`;
       location.href = "app.html";
     } catch (_) {
-      elements.message.textContent = "לא ניתן לשמור את הפרויקט במכשיר. מומלץ לפנות מקום בדפדפן ולנסות שוב.";
+      elements.message.textContent = "לא ניתן לשמור את המקצוע במכשיר. מומלץ לפנות מקום בדפדפן ולנסות שוב.";
     }
   }
 
@@ -732,5 +732,5 @@
   applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=18").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
 })();

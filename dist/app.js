@@ -735,7 +735,7 @@
     const viewCopy = {
       schedule: ["מערכת שבועית", "מוצגים השיבוצים התואמים למסננים הפעילים."],
       students: ["שיבוצים לפי תלמידים", "מעקב אחר הזכאות והשעות שנקבעו לכל תלמיד ותלמידה."],
-      teachers: ["שיבוצים לפי צוות", "עומס השעות והמערכת של כל מורה בפרויקט."],
+      teachers: ["שיבוצים לפי צוות", "עומס השעות והמערכת של כל מורה במקצוע."],
       registry: ["מאגר תלמידים", "ניהול הסל האישי, מערכת השעות והחרגות השיבוץ."]
     };
     [elements.toolbarTitle.textContent, elements.toolbarDescription.textContent] = viewCopy[activeView];
@@ -772,7 +772,7 @@
     const grade = student?.grade || "השכבה של התלמיד/ה";
     const teacher = teacherData.get(teacherName);
     if (activeLocks[studentName]) return `${studentName} נעול/ה ל${activeLocks[studentName]}, ולכן אינו/ה יכול/ה להיות משובץ/ת אצל ${teacherName}`;
-    if (!teacher) return `${teacherName} אינו/ה מופיע/ה בצוות הפרויקט`;
+    if (!teacher) return `${teacherName} אינו/ה מופיע/ה בצוות המקצוע`;
     const group = grade.startsWith("יא") ? "יא" : grade.startsWith("יב") ? "יב" : grade.startsWith("י") ? "י" : grade;
     const matchesGrade = grades => grades.includes(grade) || grades.includes(group);
     const forbidden = teacher.forbidden_student_grades || teacher.excluded_student_grades || [];
@@ -1908,7 +1908,7 @@
       const available = source?.candidates?.length || 0;
       return `<article class="team-manager-card"><div><h3>${esc(teacher.teacher)}</h3><p>${used}/${teacher.quota} שעות משובצות · ${available} שעות זמינות${flexible ? ` · ${flexible} גמישות` : ""}</p><small>${(source?.allowed_student_grades || []).length ? `שכבות: ${esc(source.allowed_student_grades.join(", "))}` : "כל השכבות"}</small></div><div><button class="secondary-button" data-edit-team-teacher="${esc(teacher.teacher)}" type="button">עריכת מורה</button><button class="text-button" data-rules-team-teacher="${esc(teacher.teacher)}" type="button">מדיניות מתקדמת</button><button class="text-button" data-remove-team-teacher="${esc(teacher.teacher)}" type="button">הסרה</button></div></article>`;
     }).join("");
-    elements.teamManagerList.innerHTML = rows || `<div class="registry-empty"><strong>עדיין אין צוות בפרויקט.</strong><p>אפשר להוסיף מורה באמצעות מערכת הצל.</p></div>`;
+    elements.teamManagerList.innerHTML = rows || `<div class="registry-empty"><strong>עדיין אין צוות במקצוע.</strong><p>אפשר להוסיף מורה באמצעות מערכת הצל.</p></div>`;
   }
 
   function resetTeacherShadowEditor(source = null) {
@@ -2249,7 +2249,7 @@
       saveStudentRegistry();
       elements.studentRegistryDialog.close();
       renderAll();
-      showToast(synced ? "התלמיד/ה נקלט/ה ונוספ/ה לפרויקט השיבוץ הנוכחי." : "פרטי התלמיד/ה נשמרו במאגר.");
+      showToast(synced ? "התלמיד/ה נקלט/ה ונוספ/ה למקצוע הנוכחי." : "פרטי התלמיד/ה נשמרו במאגר.");
     } catch (error) {
       alert(error instanceof Error ? error.message : "לא ניתן לשמור את פרטי התלמיד/ה.");
     }
@@ -2260,7 +2260,7 @@
     if (!record) return;
     const projectStudent = draft.students.find(item => item.student === record.fullName);
     const assignmentCount = assignments.filter(item => item.student === record.fullName).length;
-    const projectNote = projectStudent ? ` התלמיד/ה יוסר/תוסר גם מהפרויקט${assignmentCount ? ` ומערכת השעות תסיר ${assignmentCount} שיבוצים` : ""}.` : "";
+    const projectNote = projectStudent ? ` התלמיד/ה יוסר/תוסר גם מהמקצוע${assignmentCount ? ` ומערכת השעות תסיר ${assignmentCount} שיבוצים` : ""}.` : "";
     if (!confirm(`להסיר את ${record.fullName} ממאגר התלמידים?${projectNote}`)) return;
     studentRegistry = studentRegistry.filter(item => item.id !== recordId);
     if (projectStudent) {
@@ -2282,7 +2282,7 @@
     saveShareWilling();
     saveStudentRegistry();
     renderAll();
-    showToast(`${record.fullName} הוסר/ה מהמאגר${projectStudent ? " ומהפרויקט" : ""}.`);
+    showToast(`${record.fullName} הוסר/ה מהמאגר${projectStudent ? " ומהמקצוע" : ""}.`);
   }
 
   function openStudentDetail(recordId) {
@@ -2307,9 +2307,9 @@
       const assigned = record.progress?.[request.subject]?.assigned ?? (subjectMatchesProject(request.subject) ? record.progress?.[projectMeta.subject]?.assigned : 0) ?? 0;
       return `<li><strong>${esc(request.subject)}</strong><span>${assigned} מתוך ${request.hours} שעות שובצו</span></li>`;
     }).join("");
-    const assignmentsList = studentAssignments.length ? studentAssignments.map(item => `<li>${esc(item.day)}, שעה ${item.period} · ${esc(item.teacher)}</li>`).join("") : "<li>טרם נקבעו שעות בפרויקט הנוכחי.</li>";
+    const assignmentsList = studentAssignments.length ? studentAssignments.map(item => `<li>${esc(item.day)}, שעה ${item.period} · ${esc(item.teacher)}</li>`).join("") : "<li>טרם נקבעו שעות במקצוע הנוכחי.</li>";
     const exceptions = [record.exceptions?.allowOtherLessons ? "ניתן לשבץ על חשבון שיעורים אחרים" : "", record.exceptions?.noPeriodZero ? "שעה 0 חסומה" : "", record.exceptions?.notes || ""].filter(Boolean);
-    elements.studentDetailContent.innerHTML = `<section class="detail-summary"><div><h3>בקשות מהסל האישי</h3><ul>${requests || "<li>לא הוגדרו בקשות.</li>"}</ul></div><div><h3>שיבוצים בפרויקט הנוכחי</h3><ul>${assignmentsList}</ul></div></section>${exceptions.length ? `<section class="detail-exceptions"><h3>החרגות והערות</h3><p>${esc(exceptions.join(" · "))}</p></section>` : ""}<section class="detail-timetable"><h3>מערכת שבועית</h3>${timetable.length ? `<div class="detail-table-wrap"><table><thead><tr><th>שעה</th>${days.map(day => `<th>${day}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : "<p>טרם הועלתה מערכת שעות אישית.</p>"}</section>`;
+    elements.studentDetailContent.innerHTML = `<section class="detail-summary"><div><h3>בקשות מהסל האישי</h3><ul>${requests || "<li>לא הוגדרו בקשות.</li>"}</ul></div><div><h3>שיבוצים במקצוע הנוכחי</h3><ul>${assignmentsList}</ul></div></section>${exceptions.length ? `<section class="detail-exceptions"><h3>החרגות והערות</h3><p>${esc(exceptions.join(" · "))}</p></section>` : ""}<section class="detail-timetable"><h3>מערכת שבועית</h3>${timetable.length ? `<div class="detail-table-wrap"><table><thead><tr><th>שעה</th>${days.map(day => `<th>${day}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>` : "<p>טרם הועלתה מערכת שעות אישית.</p>"}</section>`;
     elements.studentDetailDialog.showModal();
   }
 
@@ -2340,7 +2340,7 @@
     document.querySelector("#projectTitle").textContent = `שיבוצי ${projectMeta.subject} דיפרנציאליים`;
     elements.settingsDialog.close();
     renderAll();
-    showToast("הגדרות הפרויקט נשמרו.");
+    showToast("הגדרות המקצוע נשמרו.");
   }
 
   function parseList(value) {
@@ -2486,7 +2486,7 @@
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json;charset=utf-8" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `פרויקט-שיבוצי-${projectMeta.subject || "דיפרנציאלי"}.json`;
+    link.download = `מקצוע-שיבוצי-${projectMeta.subject || "דיפרנציאלי"}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
     safeLocalSet(lastBackupKey, new Date().toISOString());
@@ -2496,7 +2496,7 @@
 
   function validateBackupFile(data) {
     if (!data || !Array.isArray(data.assignments)) {
-      throw new Error("הקובץ אינו קובץ פרויקט תקין של מערכת השיבוצים.");
+      throw new Error("הקובץ אינו קובץ מקצוע תקין של מערכת השיבוצים.");
     }
     const knownStudents = new Set(draft.students.map(student => student.student));
     const knownTeachers = new Set(draft.teachers.map(teacher => teacher.teacher));
@@ -2530,8 +2530,8 @@
       if (file.size > maxBackupBytes) throw new Error("קובץ הגיבוי גדול מ־15MB ולכן לא ניתן לקרוא אותו בבטחה.");
       const parsed = JSON.parse(await file.text());
       if (parsed?.kind === "differential-scheduling-project" && parsed.schedule && parsed.studentAvailability && parsed.teacherAvailability) {
-        const projectName = parsed.meta?.team || parsed.meta?.subject || "הפרויקט החדש";
-        if (!confirm(`לטעון את ${projectName} במקום הפרויקט המוצג כעת?`)) return;
+        const projectName = parsed.meta?.team || parsed.meta?.subject || "המקצוע החדש";
+        if (!confirm(`לטעון את ${projectName} במקום המקצוע המוצג כעת?`)) return;
         if (Array.isArray(parsed.studentRegistry)) safeLocalSet(registryStorageKey, JSON.stringify(parsed.studentRegistry));
         const importedProjectId = String(parsed.meta?.id || `${parsed.meta?.school || "school"}-${parsed.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
         const importedAssignmentStorageKey = `differential-project-${importedProjectId}-assignments-v1`;
@@ -2547,9 +2547,9 @@
       }
       const importedAssignments = validateBackupFile(parsed);
       const importedLocks = locksFromBackup(parsed);
-      const shouldReplace = confirm(`קובץ הפרויקט כולל ${importedAssignments.length} שיבוצים. לטעון אותו במקום הגרסה הנוכחית?`);
+      const shouldReplace = confirm(`קובץ המקצוע כולל ${importedAssignments.length} שיבוצים. לטעון אותו במקום הגרסה הנוכחית?`);
       if (!shouldReplace) return;
-      captureUndo("ייבוא פרויקט");
+      captureUndo("ייבוא מקצוע");
       assignments = importedAssignments;
       activeLocks = importedLocks;
       activeConstraints = Array.isArray(parsed.constraints) ? parsed.constraints : [];
@@ -2564,9 +2564,9 @@
       saveStudentRegistry();
       renderAll();
       const issues = scheduleWarnings().filter(item => item.level !== "ok").length;
-      showToast(issues ? `הפרויקט נטען. נמצאו ${issues} התראות לבדיקה.` : "הפרויקט נטען בהצלחה ולא נמצאו בעיות.");
+      showToast(issues ? `המקצוע נטען. נמצאו ${issues} התראות לבדיקה.` : "המקצוע נטען בהצלחה ולא נמצאו בעיות.");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "לא ניתן לקרוא את קובץ הפרויקט.");
+      alert(error instanceof Error ? error.message : "לא ניתן לקרוא את קובץ המקצוע.");
     }
   }
 
@@ -2598,7 +2598,7 @@
     assignments = [];
     saveAssignments();
     renderAll();
-    showToast("הלוח נוקה. נתוני הפרויקט וההגדרות נשמרו.");
+    showToast("הלוח נוקה. נתוני המקצוע וההגדרות נשמרו.");
   }
 
   function registerWebMcpTools() {
@@ -2644,7 +2644,7 @@
 
   const isEmptyProject = draft.students.length === 0 && draft.teachers.length === 0;
   document.querySelector("#projectEyebrow").textContent = isEmptyProject ? "מערכת שיבוצים דיפרנציאליים" : `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
-  document.querySelector("#projectTitle").textContent = isEmptyProject ? "פרויקט חדש" : `שיבוצי ${projectMeta.subject || "דיפרנציאליים"} דיפרנציאליים`;
+  document.querySelector("#projectTitle").textContent = isEmptyProject ? "מקצוע חדש" : `שיבוצי ${projectMeta.subject || "דיפרנציאליים"} דיפרנציאליים`;
   document.title = isEmptyProject ? "מערכת שיבוצים דיפרנציאליים" : `${projectMeta.subject || "שיבוצים"} — ${projectMeta.school || "מערכת דיפרנציאלית"}`;
   document.querySelector("#emptyProjectState").hidden = !isEmptyProject;
   document.querySelector("#summarySection").hidden = isEmptyProject;
@@ -2653,7 +2653,7 @@
   const defaultProjectButton = document.querySelector("#defaultProjectButton");
   defaultProjectButton.hidden = !storedProject;
   defaultProjectButton.addEventListener("click", () => {
-    if (!confirm("לסגור את הפרויקט הנוכחי ולחזור למסך הריק? מומלץ לייצא את הפרויקט לפני המעבר.")) return;
+    if (!confirm("לסגור את המקצוע הנוכחי ולחזור למסך הריק? מומלץ לייצא את המקצוע לפני המעבר.")) return;
     localStorage.removeItem(activeProjectKey);
     location.reload();
   });
@@ -2873,7 +2873,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=18").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
