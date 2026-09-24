@@ -16,6 +16,8 @@
   const TEACHER_REQUIRED_HEADERS = ["שם מורה", "מכסה מועדפת", "מכסה מרבית", "יום", "שעה", "סוג זמינות", "שכבות מותרות", "שכבות מועדפות", "שעות להימנע", "מקסימום רצוף"];
   const TEACHER_HEADERS = [...TEACHER_REQUIRED_HEADERS, "שעות הוראה קבועות ביום"];
   const activeProjectKey = "differential-active-project-v1";
+  const newProjectSubjectKey = "differential-new-project-subject-v1";
+  const campusStorageKey = "differential-campus-v1";
   const MAX_CSV_BYTES = 5 * 1024 * 1024;
   const state = { students: [], teachers: null, studentErrors: [], teacherErrors: [], step: 0 };
   let teacherShadowSchedule = null;
@@ -29,6 +31,8 @@
     year: document.querySelector("#yearInput"),
     team: document.querySelector("#teamInput"),
     subject: document.querySelector("#subjectInput"),
+    campusProjectHint: document.querySelector("#campusProjectHint"),
+    campusTeacherSuggestions: document.querySelector("#campusTeacherSuggestions"),
     aliases: document.querySelector("#aliasesInput"),
     lastPeriod: document.querySelector("#lastPeriodInput"),
     avoidPeriods: document.querySelector("#avoidPeriodsInput"),
@@ -54,6 +58,33 @@
     manualTeacherList: document.querySelector("#manualTeacherList"),
     addManualTeacher: document.querySelector("#addManualTeacherButton")
   };
+
+  function loadCampusSubjectHint() {
+    try {
+      const value = JSON.parse(localStorage.getItem(newProjectSubjectKey));
+      if (value?.name) return value;
+    } catch (_) { /* Opening a project manually remains fully supported. */ }
+    return null;
+  }
+
+  function applyCampusSubjectHint() {
+    const hint = loadCampusSubjectHint();
+    if (!hint) return;
+    elements.subject.value = hint.name;
+    elements.aliases.value = (hint.aliases || []).join(", ");
+    try {
+      const campus = JSON.parse(localStorage.getItem(campusStorageKey));
+      if (campus?.school) elements.school.value = campus.school;
+    } catch (_) { /* The subject still works without a campus title. */ }
+    elements.campusProjectHint.hidden = false;
+    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נבחר מהמאגר</strong><p>אפשר לשנות את הפרטים, או להמשיך לבניית הפרויקט.</p></div>`;
+    const teachers = hint.teachers || [];
+    if (!teachers.length) { localStorage.removeItem(newProjectSubjectKey); return; }
+    elements.campusTeacherSuggestions.hidden = false;
+    elements.campusTeacherSuggestions.innerHTML = `<strong>מורות שזוהו במערכות תלמידים</strong><span>לחיצה תמלא את השם; עדיין יש לבנות זמינות ומכסות.</span><div>${teachers.map(item => `<button type="button" data-campus-teacher="${esc(item.name)}">${esc(item.name)}</button>`).join("")}</div>`;
+    elements.campusTeacherSuggestions.querySelectorAll("[data-campus-teacher]").forEach(button => button.addEventListener("click", () => { elements.manualTeacherName.value = button.dataset.campusTeacher; elements.manualTeacherName.focus(); }));
+    localStorage.removeItem(newProjectSubjectKey);
+  }
 
   function esc(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -698,7 +729,8 @@
   elements.back.addEventListener("click", () => showStep(state.step - 1));
   document.querySelector("#studentTemplateButton").addEventListener("click", studentTemplate);
   document.querySelector("#teacherTemplateButton").addEventListener("click", teacherTemplate);
+  applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=12").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=14").catch(() => {});
 })();

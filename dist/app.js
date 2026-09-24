@@ -46,6 +46,7 @@
   const historyStorageKey = `differential-project-${projectId}-history-v1`;
   const dismissedWarningStorageKey = `differential-project-${projectId}-dismissed-warnings-v1`;
   const registryStorageKey = "differential-student-registry-v1";
+  const campusStorageKey = "differential-campus-v1";
   const lastBackupKey = "differential-last-backup-v1";
   const maxBackupBytes = 15 * 1024 * 1024;
   const defaultLocks = { ...(draft.defaultLocks || {}) };
@@ -54,6 +55,7 @@
   let activeLocks = loadSavedLocks();
   let activeConstraints = loadSavedConstraints();
   let shareWilling = loadShareWilling();
+  let campusStore = loadCampusStore();
   let studentRegistry = loadStudentRegistry();
   let undoHistory = loadUndoHistory();
   let activeRegistryStudentId = null;
@@ -241,10 +243,14 @@
   }
 
   function loadStudentRegistry() {
-    let saved = [];
+    let saved = Array.isArray(campusStore.students) ? campusStore.students : [];
     try {
       const parsed = JSON.parse(localStorage.getItem(registryStorageKey));
-      if (Array.isArray(parsed)) saved = parsed;
+      if (Array.isArray(parsed)) {
+        const merged = new Map(saved.map(item => [item.id || item.fullName, item]));
+        parsed.forEach(item => merged.set(item.id || item.fullName, item));
+        saved = [...merged.values()];
+      }
     } catch (_) {
       localStorage.removeItem(registryStorageKey);
     }
@@ -271,6 +277,14 @@
       });
     });
     return [...byName.values()];
+  }
+
+  function loadCampusStore() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(campusStorageKey));
+      if (stored && typeof stored === "object") return { ...stored, students: Array.isArray(stored.students) ? stored.students : [], subjects: Array.isArray(stored.subjects) ? stored.subjects : [], archives: Array.isArray(stored.archives) ? stored.archives : [] };
+    } catch (_) { /* The project registry remains available on its own. */ }
+    return { schemaVersion: 1, school: projectMeta.school || "", year: projectMeta.year || "", students: [], subjects: [], archives: [] };
   }
 
   function loadUndoHistory() {
@@ -388,7 +402,13 @@
   }
 
   function saveStudentRegistry() {
-    if (safeLocalSet(registryStorageKey, JSON.stringify(studentRegistry))) markSaved();
+    campusStore.students = studentRegistry;
+    campusStore.school = campusStore.school || projectMeta.school || "";
+    campusStore.year = campusStore.year || projectMeta.year || "";
+    campusStore.updatedAt = new Date().toISOString();
+    const savedLegacy = safeLocalSet(registryStorageKey, JSON.stringify(studentRegistry));
+    const savedCampus = safeLocalSet(campusStorageKey, JSON.stringify(campusStore));
+    if (savedLegacy || savedCampus) markSaved();
   }
 
   function assignmentCounts() {
@@ -2817,7 +2837,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=12").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=14").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();

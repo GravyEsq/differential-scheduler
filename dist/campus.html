@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="מאגר התלמידים והמקצועות של התיכון" />
+    <meta name="theme-color" content="#183b65" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>מרכז התיכון | שיבוצים דיפרנציאליים</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="campus-page">
+    <a class="skip-link" href="#campusMain">דילוג לתוכן הראשי</a>
+    <header class="topbar campus-topbar">
+      <div><p class="eyebrow">שיבוצים דיפרנציאליים</p><h1>מרכז התיכון</h1></div>
+      <div class="topbar-actions"><a class="new-project-link" href="app.html">חזרה לפרויקט</a><span class="privacy-badge">נשמר במכשיר בלבד</span></div>
+    </header>
+
+    <main id="campusMain" class="campus-main" tabindex="-1">
+      <section class="campus-hero">
+        <div><p class="eyebrow dark">מאגר אחד לכל המקצועות</p><h2 id="campusTitle">התחילו את מאגר התיכון</h2><p id="campusDescription">כאן נשמרים התלמידים, המערכות, המקצועות והצעות הצוות של שנת הלימודים הפעילה.</p></div>
+        <button id="archiveYearButton" class="secondary-button" type="button">יצירת צילום סוף שנה</button>
+      </section>
+
+      <section id="campusSetup" class="campus-card">
+        <div class="section-heading"><div><p class="eyebrow dark">פעם אחת בלבד</p><h2>הגדרת שנת הלימודים</h2></div></div>
+        <div class="campus-form"><label><span>שם התיכון</span><input id="campusSchool" autocomplete="organization" placeholder="לדוגמה: תיכון רמון" /></label><label><span>שנת לימודים</span><input id="campusYear" placeholder="לדוגמה: תשפ״ז" /></label><button id="saveCampusButton" class="primary-button" type="button">שמירת המאגר</button></div>
+      </section>
+
+      <section id="campusDashboard" hidden>
+        <div class="campus-stats" aria-live="polite"><article><span>תלמידים במאגר</span><strong id="campusStudentCount">0</strong></article><article><span>מקצועות פעילים</span><strong id="campusSubjectCount">0</strong></article><article><span>מורות שהוצעו</span><strong id="campusTeacherCount">0</strong></article><article><span>צילומי שנה</span><strong id="campusArchiveCount">0</strong></article></div>
+
+        <section class="campus-card">
+          <div class="section-heading"><div><p class="eyebrow dark">מקצועות</p><h2>הוספה ובניית צוותים</h2><p>אפשר להוסיף ידנית, להדביק רשימה, או לאתר מקצועות מתוך מערכות תלמידים.</p></div></div>
+          <div class="campus-methods">
+            <form id="manualSubjectForm" class="campus-mini-form"><strong>מקצוע אחד</strong><label><span>שם המקצוע</span><input id="manualSubjectName" placeholder="לדוגמה: ספרות" /></label><label><span>שמות חלופיים <small>(רשות, מופרדים בפסיק)</small></span><input id="manualSubjectAliases" placeholder="לדוגמה: הבעה" /></label><button class="secondary-button" type="submit">הוספת מקצוע</button></form>
+            <form id="listSubjectForm" class="campus-mini-form"><strong>רשימת מקצועות</strong><label><span>מקצוע בכל שורה</span><textarea id="subjectList" rows="4" placeholder="עברית\nספרות\nהיסטוריה"></textarea></label><button class="secondary-button" type="submit">בדיקת הרשימה</button></form>
+          </div>
+          <div id="subjectPreview" class="preview-box" hidden></div>
+          <div id="subjectListView" class="campus-chip-list" aria-live="polite"></div>
+        </section>
+
+        <section class="campus-card">
+          <div class="section-heading"><div><p class="eyebrow dark">קליטת מערכות</p><h2>סריקת מערכות תלמידים</h2><p>בחרו קובצי Excel של מערכות תלמידים. הקבצים נקראים בדפדפן בלבד; לפני השמירה תקבלו תצוגה מקדימה.</p></div></div>
+          <div class="campus-import"><label class="file-picker"><span>בחירת מערכות Excel</span><input id="scheduleFiles" type="file" accept=".xlsx" multiple /></label><button id="scanSchedulesButton" class="primary-button" type="button">סריקה והצגת הצעה</button></div>
+          <div id="scanStatus" class="file-status" aria-live="polite">לא נבחרו קבצים.</div>
+          <section id="scanPreview" class="scan-preview" hidden aria-live="polite"></section>
+        </section>
+
+        <section class="campus-card">
+          <div class="section-heading"><div><p class="eyebrow dark">תלמידים</p><h2>המאגר הפעיל</h2><p>לכל תלמיד מערכת שבועית אחת ובקשות תגבור לפי מקצוע.</p></div></div>
+          <div id="campusStudentsView" class="campus-student-list"></div>
+        </section>
+
+        <section class="campus-card campus-archive-card">
+          <div class="section-heading"><div><p class="eyebrow dark">ארכיון</p><h2>צילומי שנים קודמות</h2><p>הצילומים הם לקריאה בלבד ולא משפיעים על שנת הלימודים הפעילה.</p></div></div>
+          <div id="archiveList" class="archive-list"></div>
+        </section>
+      </section>
+    </main>
+    <div id="campusToast" class="toast" role="status" aria-live="polite"></div>
+    <script src="xlsx-reader.js"></script>
+    <script src="campus.js"></script>
+  </body>
+</html>
