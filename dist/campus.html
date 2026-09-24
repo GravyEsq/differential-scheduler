@@ -41,6 +41,12 @@
         </section>
 
         <section class="campus-card">
+          <div class="section-heading"><div><p class="eyebrow dark">מעבר מהעבודה הקיימת</p><h2>ייבוא מהפורמט הישן</h2><p>הורידו את הטבלה מגוגל דוקס כקובץ Word. המערכת תציע רק שינויים שהיא מזהה בוודאות; אתם מאשרים לפני כל החלה.</p></div></div>
+          <div class="campus-import"><label class="file-picker"><span>בחירת קובץ Word</span><input id="legacyDocumentFile" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /></label><button id="scanLegacyDocumentButton" class="primary-button" type="button">קריאה והצגת שינויים</button></div>
+          <div id="legacyDocumentStatus" class="file-status" aria-live="polite">הקובץ נקרא במכשיר בלבד.</div><section id="legacyDocumentPreview" class="scan-preview" hidden></section>
+        </section>
+
+        <section class="campus-card">
           <div class="section-heading"><div><p class="eyebrow dark">קליטת מערכות</p><h2>סריקת מערכות תלמידים</h2><p>בחרו קובצי Excel של מערכות תלמידים. הקבצים נקראים בדפדפן בלבד; לפני השמירה תקבלו תצוגה מקדימה.</p></div></div>
           <div class="campus-import"><label class="file-picker"><span>בחירת מערכות Excel</span><input id="scheduleFiles" type="file" accept=".xlsx" multiple /></label><button id="scanSchedulesButton" class="primary-button" type="button">סריקה והצגת הצעה</button></div>
           <div id="scanStatus" class="file-status" aria-live="polite">לא נבחרו קבצים.</div>
@@ -61,6 +67,7 @@
     <div id="campusToast" class="toast" role="status" aria-live="polite"></div>
     <dialog id="requestsDialog" class="edit-dialog"><form method="dialog" class="dialog-shell"><div class="dialog-head"><div><p class="eyebrow dark">מאגר התיכון</p><h2 id="requestsDialogTitle">זכאויות תלמיד/ה</h2></div><button class="close-button" value="cancel" aria-label="סגירה">×</button></div><p class="dialog-copy">מגדירים בקשה לכל מקצוע. השינויים ישתקפו בפרויקטים הרלוונטיים כאשר ייפתחו.</p><div id="campusRequestRows" class="request-rows"></div><button id="addCampusRequestRow" class="text-button" type="button">+ הוספת מקצוע</button><div class="dialog-actions"><button id="saveCampusRequests" class="primary-button" type="button">שמירת זכאויות</button><button class="secondary-button" value="cancel">ביטול</button></div></form></dialog>
     <script src="xlsx-reader.js"></script>
+    <script src="docx-reader.js"></script>
     <script src="campus.js"></script>
   </body>
 </html>

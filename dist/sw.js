@@ -1,5 +1,5 @@
-const CACHE_NAME = "differential-shell-v15";
-const APP_SHELL = ["./", "./index.html", "./app.html", "./setup.html", "./campus.html", "./styles.css", "./app.js", "./setup.js", "./campus.js", "./schedule-data.js", "./xlsx-reader.js", "./manifest.webmanifest"];
+const CACHE_NAME = "differential-shell-v16";
+const APP_SHELL = ["./", "./index.html", "./app.html", "./setup.html", "./campus.html", "./styles.css", "./app.js", "./setup.js", "./campus.js", "./schedule-data.js", "./xlsx-reader.js", "./docx-reader.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));

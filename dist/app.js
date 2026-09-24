@@ -397,7 +397,8 @@
 
   function syncCampusAssignments() {
     const currentProjectAssignments = assignments.map(item => ({ ...item, campusProjectId: projectId, subject: projectMeta.subject, subjectAliases: projectMeta.aliases || [], updatedAt: new Date().toISOString() }));
-    campusStore.assignments = [...(campusStore.assignments || []).filter(item => item.campusProjectId !== projectId), ...currentProjectAssignments];
+    const replacesLegacyReservation = item => item.legacyReservation && currentProjectAssignments.some(current => current.student === item.student && current.day === item.day && current.period === item.period && String(current.subject || projectMeta.subject) === String(item.subject));
+    campusStore.assignments = [...(campusStore.assignments || []).filter(item => item.campusProjectId !== projectId && !replacesLegacyReservation(item)), ...currentProjectAssignments];
     campusStore.school = campusStore.school || projectMeta.school || "";
     campusStore.year = campusStore.year || projectMeta.year || "";
     campusStore.updatedAt = new Date().toISOString();
@@ -405,7 +406,7 @@
   }
 
   function externalDifferentialAt({ student = null, teacher = null, day, period }) {
-    return (campusStore.assignments || []).find(item => item.campusProjectId !== projectId && item.day === day && item.period === period && ((student && item.student === student) || (teacher && item.teacher === teacher))) || null;
+    return (campusStore.assignments || []).find(item => item.campusProjectId !== projectId && !(item.legacyReservation && item.subject === projectMeta.subject) && item.day === day && item.period === period && ((student && item.student === student) || (teacher && item.teacher === teacher))) || null;
   }
 
   function differentialForDisplay({ student = null, teacher = null, day, period }) {
@@ -2872,7 +2873,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=15").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=16").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();

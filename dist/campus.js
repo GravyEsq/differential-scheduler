@@ -14,10 +14,11 @@
     title: document.querySelector("#campusTitle"), description: document.querySelector("#campusDescription"), archive: document.querySelector("#archiveYearButton"), report: document.querySelector("#globalReportButton"), export: document.querySelector("#exportCampusButton"), restore: document.querySelector("#restoreCampusFile"),
     studentCount: document.querySelector("#campusStudentCount"), subjectCount: document.querySelector("#campusSubjectCount"), teacherCount: document.querySelector("#campusTeacherCount"), archiveCount: document.querySelector("#campusArchiveCount"),
     manualForm: document.querySelector("#manualSubjectForm"), manualName: document.querySelector("#manualSubjectName"), manualAliases: document.querySelector("#manualSubjectAliases"), listForm: document.querySelector("#listSubjectForm"), list: document.querySelector("#subjectList"), subjectPreview: document.querySelector("#subjectPreview"), subjectList: document.querySelector("#subjectListView"),
-    files: document.querySelector("#scheduleFiles"), scan: document.querySelector("#scanSchedulesButton"), scanStatus: document.querySelector("#scanStatus"), scanPreview: document.querySelector("#scanPreview"), students: document.querySelector("#campusStudentsView"), archives: document.querySelector("#archiveList"), toast: document.querySelector("#campusToast"), requestsDialog: document.querySelector("#requestsDialog"), requestsTitle: document.querySelector("#requestsDialogTitle"), requestRows: document.querySelector("#campusRequestRows"), addRequestRow: document.querySelector("#addCampusRequestRow"), saveRequests: document.querySelector("#saveCampusRequests")
+    files: document.querySelector("#scheduleFiles"), scan: document.querySelector("#scanSchedulesButton"), scanStatus: document.querySelector("#scanStatus"), scanPreview: document.querySelector("#scanPreview"), legacyFile: document.querySelector("#legacyDocumentFile"), legacyScan: document.querySelector("#scanLegacyDocumentButton"), legacyStatus: document.querySelector("#legacyDocumentStatus"), legacyPreview: document.querySelector("#legacyDocumentPreview"), students: document.querySelector("#campusStudentsView"), archives: document.querySelector("#archiveList"), toast: document.querySelector("#campusToast"), requestsDialog: document.querySelector("#requestsDialog"), requestsTitle: document.querySelector("#requestsDialogTitle"), requestRows: document.querySelector("#campusRequestRows"), addRequestRow: document.querySelector("#addCampusRequestRow"), saveRequests: document.querySelector("#saveCampusRequests")
   };
   let campus = loadCampus();
   let pendingImport = null;
+  let pendingLegacyImport = null;
   let toastTimer = null;
 
   function defaultCampus() { return { schemaVersion: 1, school: "", year: "", subjects: [], students: [], assignments: [], archives: [], updatedAt: null }; }
@@ -98,6 +99,41 @@
     const lineTeacher = lines.length === 2 && /^[א-ת][א-ת\s׳״'\-]{1,40}$/.test(lines[1]) ? lines[1] : null;
     const teacher = teacherMatch?.[1] ? clean(teacherMatch[1]) : lineTeacher;
     return { raw: normalized, subject: canonicalSubject(subjectText).name, teacher, confidence: teacher ? "certain" : "review" };
+  }
+  function knownSubjectIn(text) {
+    const source = key(text);
+    const options = [...campus.subjects.flatMap(subject => [subject.name, ...(subject.aliases || [])]), "עברית", "לשון", "שפה"];
+    const match = options.find(subject => source.includes(key(subject)));
+    return match ? canonicalSubject(match).name : null;
+  }
+  function oldFormatChanges(tables) {
+    const found = new Map(); const unknownRows = [];
+    tables.forEach(table => table.forEach(row => {
+      const joined = row.join(" · "); const student = campus.students.find(item => key(joined).includes(key(item.fullName)));
+      if (!student) { if (/עברית|לשון|שפה/.test(joined)) unknownRows.push(joined); return; }
+      const subject = knownSubjectIn(joined); const hours = Number((joined.match(/(?:עברית|לשון|שפה|ספרות|היסטוריה|מתמטיקה|אנגלית)[^\d]{0,24}(\d+)\s*(?:שעות?|שעו?ת)?/i) || [])[1]);
+      if (subject && Number.isInteger(hours) && hours > 0) found.set(`${student.id}|${subject}`, { kind: "request", student, subject, hours });
+      const day = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"].find(item => joined.includes(item)); const period = Number((joined.match(/(?:שעה|שעור)\s*([0-8])/i) || [])[1]);
+      if (subject && day && Number.isInteger(period)) found.set(`${student.id}|${subject}|${day}|${period}`, { kind: "reservation", student, subject, day, period });
+    }));
+    return { changes: [...found.values()], unknownRows };
+  }
+  async function scanLegacyDocument() {
+    const [file] = elements.legacyFile.files; if (!file) return showToast("בחרו קובץ Word שהורד מהמסמך הישן.");
+    elements.legacyScan.disabled = true; elements.legacyStatus.textContent = "קורא את הטבלאות ומכין תצוגה מקדימה…"; elements.legacyStatus.className = "file-status";
+    try {
+      const { tables } = await window.DocxTableReader.parseTables(file); const result = oldFormatChanges(tables); pendingLegacyImport = result;
+      const requests = result.changes.filter(item => item.kind === "request"); const reservations = result.changes.filter(item => item.kind === "reservation");
+      elements.legacyPreview.hidden = false; elements.legacyPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — הפורמט הישן</h3><p>זוהו ${requests.length} עדכוני זכאות ו־${reservations.length} שעות דיפרנציאליות. השעות יישמרו כהזמנות מהפורמט הישן עד לשיוך שלהן בפרויקט המקצוע.</p></div></div><div class="legacy-change-list">${result.changes.map((item, index) => `<label><input type="checkbox" data-legacy-change="${index}" checked /> <span><strong>${esc(item.student.fullName)}</strong> · ${esc(item.subject)} · ${item.kind === "request" ? `${item.hours} שעות` : `${item.day}, שעה ${item.period}`}</span></label>`).join("") || "<p>לא זוהו שורות חד־משמעיות. אפשר להמשיך לעבוד מהמאגר ולערוך ידנית.</p>"}${result.unknownRows.length ? `<small>${result.unknownRows.length} שורות נותרו לבדיקה ולא ייובאו.</small>` : ""}</div><div class="preview-actions"><button id="applyLegacyImport" class="primary-button" type="button" ${result.changes.length ? "" : "disabled"}>אישור והחלת השינויים</button><button id="discardLegacyImport" class="secondary-button" type="button">ביטול</button></div>`;
+      document.querySelector("#discardLegacyImport").addEventListener("click", () => { pendingLegacyImport = null; elements.legacyPreview.hidden = true; }); document.querySelector("#applyLegacyImport")?.addEventListener("click", applyLegacyImport);
+      elements.legacyStatus.textContent = `נמצאו ${tables.length} טבלאות. שום דבר לא נשמר לפני אישור.`; elements.legacyStatus.className = "file-status ok";
+    } catch (error) { elements.legacyStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את הקובץ."; elements.legacyStatus.className = "file-status error"; }
+    finally { elements.legacyScan.disabled = false; }
+  }
+  function applyLegacyImport() {
+    if (!pendingLegacyImport) return; const selected = new Set([...elements.legacyPreview.querySelectorAll("[data-legacy-change]:checked")].map(input => Number(input.dataset.legacyChange)));
+    pendingLegacyImport.changes.forEach((change, index) => { if (!selected.has(index)) return; if (change.kind === "request") { const other = (change.student.requests || []).filter(item => key(item.subject) !== key(change.subject)); change.student.requests = [...other, { subject: change.subject, hours: change.hours }]; addSubject(change.subject); } else { const known = (campus.assignments || []).find(item => item.student === change.student.fullName && item.subject === change.subject); campus.assignments = [...(campus.assignments || []).filter(item => !(item.legacyReservation && item.student === change.student.fullName && item.subject === change.subject && item.day === change.day && item.period === change.period)), { id: `legacy-${Date.now()}-${index}`, campusProjectId: "legacy-format", legacyReservation: true, student: change.student.fullName, grade: change.student.grade, teacher: known?.teacher || "יש לשייך מורה", subject: change.subject, day: change.day, period: change.period, updatedAt: new Date().toISOString() }]; } });
+    saveCampus(); pendingLegacyImport = null; elements.legacyPreview.hidden = true; render(); showToast("השינויים שנבחרו מהפורמט הישן נשמרו במאגר.");
   }
   async function scanSchedules() {
     const files = [...elements.files.files];
@@ -194,6 +230,7 @@
   elements.manualForm.addEventListener("submit", event => { event.preventDefault(); const name = clean(elements.manualName.value); if (!name) return showToast("יש להזין שם מקצוע."); addSubject(name, split(elements.manualAliases.value)); saveCampus(); elements.manualName.value = ""; elements.manualAliases.value = ""; render(); showToast("המקצוע נוסף למאגר."); });
   elements.listForm.addEventListener("submit", event => { event.preventDefault(); const values = split(elements.list.value); if (!values.length) return showToast("הדביקו לפחות מקצוע אחד."); prepareSubjects(values, "הצעת מקצועות מהרשימה"); });
   elements.scan.addEventListener("click", scanSchedules); elements.archive.addEventListener("click", archiveYear);
+  elements.legacyScan.addEventListener("click", scanLegacyDocument);
   elements.report.addEventListener("click", globalReport); elements.export.addEventListener("click", exportCampus); elements.restore.addEventListener("change", event => restoreCampus(event.target.files[0]));
   elements.students.addEventListener("click", event => { const button = event.target.closest("[data-edit-requests]"); if (button) openRequests(button.dataset.editRequests); });
   elements.addRequestRow.addEventListener("click", () => elements.requestRows.insertAdjacentHTML("beforeend", requestRow()));
@@ -202,5 +239,5 @@
   elements.subjectList.addEventListener("click", event => { const button = event.target.closest("[data-open-subject]"); if (!button) return; const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return; localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] })); location.href = "setup.html"; });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=15").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=16").catch(() => {});
 })();
