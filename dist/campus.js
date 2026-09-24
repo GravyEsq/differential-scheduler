@@ -123,7 +123,8 @@
   }
   async function scanLegacyDocument() {
     const [file] = elements.legacyFile.files; if (!file) return showToast("בחרו קובץ Word שהורד מהמסמך הישן.");
-    if (!campus.students.length) return showToast("לפני ייבוא מהפורמט הישן יש לקלוט תלמידים למאגר, כדי שהמערכת תוכל לזהות אותם בבטחה.");
+    if (!campus.students.length) { const message = "לפני ייבוא מהפורמט הישן יש לקלוט תלמידים למאגר, כדי שהמערכת תוכל לזהות אותם בבטחה."; elements.legacyStatus.textContent = message; elements.legacyStatus.className = "file-status error"; return showToast(message); }
+    if (!window.DocxTableReader?.parseTables) { elements.legacyStatus.textContent = "רכיב קריאת Word לא נטען. רעננו את הדף ונסו שוב."; elements.legacyStatus.className = "file-status error"; return; }
     elements.legacyScan.disabled = true; elements.legacyStatus.textContent = "קורא את הטבלאות ומכין תצוגה מקדימה…"; elements.legacyStatus.className = "file-status";
     try {
       const { tables } = await window.DocxTableReader.parseTables(file); const result = oldFormatChanges(tables); pendingLegacyImport = result;
@@ -235,6 +236,15 @@
   elements.listForm.addEventListener("submit", event => { event.preventDefault(); const values = split(elements.list.value); if (!values.length) return showToast("הדביקו לפחות מקצוע אחד."); prepareSubjects(values, "הצעת מקצועות מהרשימה"); });
   elements.scan.addEventListener("click", scanSchedules); elements.archive.addEventListener("click", archiveYear);
   elements.legacyScan.addEventListener("click", scanLegacyDocument);
+  elements.legacyFile.addEventListener("change", () => {
+    const [file] = elements.legacyFile.files;
+    elements.legacyPreview.hidden = true;
+    if (!file) { elements.legacyScan.disabled = true; elements.legacyStatus.textContent = "בחרו קובץ Word שהורד מהמסמך הישן. מיד לאחר הבחירה תתחיל הקריאה המקומית."; elements.legacyStatus.className = "file-status"; return; }
+    elements.legacyScan.disabled = false;
+    elements.legacyStatus.textContent = `נבחר הקובץ „${file.name}”. מתחיל לקרוא אותו במכשיר…`;
+    elements.legacyStatus.className = "file-status";
+    scanLegacyDocument();
+  });
   elements.report.addEventListener("click", globalReport); elements.export.addEventListener("click", exportCampus); elements.restore.addEventListener("change", event => restoreCampus(event.target.files[0]));
   elements.students.addEventListener("click", event => { const button = event.target.closest("[data-edit-requests]"); if (button) openRequests(button.dataset.editRequests); });
   elements.addRequestRow.addEventListener("click", () => elements.requestRows.insertAdjacentHTML("beforeend", requestRow()));
@@ -243,5 +253,5 @@
   elements.subjectList.addEventListener("click", event => { const button = event.target.closest("[data-open-subject]"); if (!button) return; const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return; localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] })); location.href = "setup.html"; });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=17").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=18").catch(() => {});
 })();
