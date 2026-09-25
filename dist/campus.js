@@ -20,12 +20,12 @@
   let pendingLegacyImport = null;
   let toastTimer = null;
 
-  function defaultCampus() { return { schemaVersion: 1, school: "", year: "", subjects: [], students: [], assignments: [], archives: [], updatedAt: null }; }
+  function defaultCampus() { return { schemaVersion: 2, school: "", year: "", subjects: [], students: [], assignments: [], projects: [], archives: [], updatedAt: null }; }
   function loadCampus() {
     let storedCampus = null;
     try {
       const saved = JSON.parse(localStorage.getItem(CAMPUS_KEY));
-      if (saved && typeof saved === "object") storedCampus = { ...defaultCampus(), ...saved, subjects: Array.isArray(saved.subjects) ? saved.subjects : [], students: Array.isArray(saved.students) ? saved.students : [], assignments: Array.isArray(saved.assignments) ? saved.assignments : [], archives: Array.isArray(saved.archives) ? saved.archives : [] };
+      if (saved && typeof saved === "object") storedCampus = { ...defaultCampus(), ...saved, subjects: Array.isArray(saved.subjects) ? saved.subjects : [], students: Array.isArray(saved.students) ? saved.students : [], assignments: Array.isArray(saved.assignments) ? saved.assignments : [], projects: Array.isArray(saved.projects) ? saved.projects : [], archives: Array.isArray(saved.archives) ? saved.archives : [] };
     } catch (_) { /* Start with a clean local shell. */ }
     try {
       const legacy = JSON.parse(localStorage.getItem(LEGACY_REGISTRY_KEY));
@@ -65,6 +65,18 @@
     if (existing) existing.aliases = allAliases;
     else campus.subjects.push({ id: `subject-${Date.now()}-${campus.subjects.length}`, name: canonical.name, aliases: allAliases, suggestedTeachers: [] });
   }
+  function projectForSubject(subject) {
+    return (campus.projects || []).find(project => key(project?.meta?.subject) === key(subject.name));
+  }
+  function activateProject(project) {
+    const projectId = String(project?.meta?.id || `${project?.meta?.school || "school"}-${project?.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
+    localStorage.setItem("differential-active-project-v1", JSON.stringify(project));
+    localStorage.setItem(`differential-project-${projectId}-assignments-v1`, JSON.stringify(project?.schedule?.assignments || []));
+    localStorage.setItem(`differential-project-${projectId}-locks-v1`, JSON.stringify(project?.locks || {}));
+    localStorage.setItem(`differential-project-${projectId}-constraints-v1`, JSON.stringify(project?.constraints || []));
+    localStorage.setItem(`differential-project-${projectId}-share-v1`, JSON.stringify(project?.shareWilling || {}));
+    location.href = "app.html";
+  }
   function render() {
     const isReady = Boolean(campus.school && campus.year);
     elements.setup.hidden = isReady; elements.dashboard.hidden = !isReady;
@@ -78,7 +90,7 @@
     elements.title.textContent = isReady ? `${campus.school} · ${campus.year}` : "התחילו את מאגר התיכון";
     elements.description.textContent = isReady ? (hasStudents ? "המאגר מוכן. עכשיו אפשר להוסיף מקצוע, לפתוח אותו ולבנות צוות." : "השלב הראשון הוא קליטת מערכות התלמידים. לאחר מכן נפתח את אפשרויות העבודה הבאות.") : "נתחיל בהגדרת התיכון ושנת הלימודים. אחר כך נקלט את מערכות התלמידים.";
     elements.school.value = campus.school; elements.year.value = campus.year;
-    elements.subjectList.innerHTML = campus.subjects.length ? campus.subjects.sort((a, b) => a.name.localeCompare(b.name, "he")).map(subject => `<article class="subject-chip"><strong>${esc(subject.name)}</strong>${subject.aliases?.length ? `<small>${esc(subject.aliases.join(" · "))}</small>` : ""}<span>${subject.suggestedTeachers?.length ? `${subject.suggestedTeachers.map(item => esc(item.name)).join(" · ")}` : "טרם זוהו מורות"}</span><button class="text-button" data-open-subject="${esc(subject.id)}" type="button">פתיחת מקצוע</button></article>`).join("") : "<p class=\"empty-note\">המקצועות שזוהו במערכות יופיעו כאן. אפשר גם להוסיף אחד ידנית.</p>";
+    elements.subjectList.innerHTML = campus.subjects.length ? campus.subjects.sort((a, b) => a.name.localeCompare(b.name, "he")).map(subject => { const existingProject = projectForSubject(subject); return `<article class="subject-chip"><strong>${esc(subject.name)}</strong>${subject.aliases?.length ? `<small>${esc(subject.aliases.join(" · "))}</small>` : ""}<span>${existingProject ? `${existingProject.schedule?.assignments?.length || 0} שעות משובצות · סביבת עבודה קיימת` : subject.suggestedTeachers?.length ? subject.suggestedTeachers.map(item => esc(item.name)).join(" · ") : "טרם הוגדר צוות"}</span><button class="text-button" data-open-subject="${esc(subject.id)}" type="button">${existingProject ? "המשך עבודה" : "הקמת מקצוע"}</button></article>`; }).join("") : "<p class=\"empty-note\">המקצועות שזוהו במערכות יופיעו כאן. אפשר גם להוסיף אחד ידנית.</p>";
     elements.students.innerHTML = campus.students.length ? campus.students.sort((a, b) => a.fullName.localeCompare(b.fullName, "he")).map(student => `<article class="campus-student"><div><strong>${esc(student.fullName)}</strong><span>${esc(student.grade || "כיתה לא הוגדרה")} · ${student.schedule?.timetable?.length ? "מערכת שעות נקלטה" : "ללא מערכת שעות"}</span></div><small>${student.requests?.length ? esc(student.requests.map(request => `${request.subject}: ${request.hours}`).join(" · ")) : "טרם הוגשו בקשות תגבור"}</small><button class="text-button" data-edit-requests="${esc(student.id)}" type="button">עריכת זכאויות</button></article>`).join("") : "<p class=\"empty-note\">טרם נקלטו תלמידים למאגר.</p>";
     elements.archives.innerHTML = campus.archives.length ? campus.archives.map(archive => `<article class="archive-row"><div><strong>${esc(archive.school)} · ${esc(archive.year)}</strong><span>${archive.students.length} תלמידים · ${archive.subjects.length} מקצועות</span></div><button class="text-button" data-view-archive="${esc(archive.id)}" type="button">צפייה</button></article>`).join("") : "<p class=\"empty-note\">עדיין לא נשמר צילום של שנה קודמת.</p>";
   }
@@ -92,16 +104,18 @@
     });
   }
   function inferLesson(raw) {
-    const text = clean(raw.replace(/\r/g, " "));
-    if (!text) return null;
-    const lines = text.split(/\n+/).map(clean).filter(Boolean);
-    const normalized = text.replace(/\n+/g, " · ");
+    const source = String(raw || "").replace(/\r/g, "\n");
+    const compact = clean(source);
+    const rosterMatch = compact.match(/^(.+?)\s+(?:יא|יב|י|ט)\d*\s*[-–]\s*(?:יא|יב|י|ט)\d*\s+([א-ת][א-ת\s׳״'\-]{1,40}?)\s+\[\d+\](?:\s+חדר\s*:.*)?$/u);
+    if (rosterMatch) return { raw: compact, subject: canonicalSubject(clean(rosterMatch[1])).name, teacher: clean(rosterMatch[2]), confidence: "certain" };
+    const lines = source.split(/\n+|\s*·\s*/).map(clean).filter(Boolean).filter(line => !/^\[?\d+\]?$/.test(line) && !/^חדר\s*:/u.test(line));
+    if (!lines.length) return null;
+    const normalized = lines.join(" · ");
     const teacherMatch = normalized.match(/(?:\bעם\b|מורה\s*:|בהנחיית)\s*([א-ת][א-ת\s׳״'\-]{1,40})/);
-    const dashParts = normalized.split(/\s*(?:—|–|-|:)\s*/).map(clean).filter(Boolean);
-    let subjectText = teacherMatch ? normalized.slice(0, teacherMatch.index) : lines[0] || dashParts[0];
-    subjectText = clean(subjectText.replace(/\b(?:עם|מורה)\b.*$/u, "").replace(/\([^)]*\)/g, ""));
+    let subjectText = teacherMatch ? normalized.slice(0, teacherMatch.index) : lines[0];
+    subjectText = clean(subjectText.replace(/\b(?:עם|מורה)\b.*$/u, "").replace(/\([^)]*\)/g, "").replace(/\s+(?:יא|יב|י|ט)\d*\s*[-–]\s*(?:יא|יב|י|ט)\d*.*$/u, ""));
     if (!subjectText || subjectText.length > 45 || /^(חלון|הפסקה|חופשי|ללא)/.test(subjectText)) return null;
-    const lineTeacher = lines.length === 2 && /^[א-ת][א-ת\s׳״'\-]{1,40}$/.test(lines[1]) ? lines[1] : null;
+    const lineTeacher = lines.slice(1).find(line => /^[א-ת][א-ת\s׳״'\-]{1,40}$/.test(line) && !/^(חדר|כיתה)/.test(line)) || null;
     const teacher = teacherMatch?.[1] ? clean(teacherMatch[1]) : lineTeacher;
     return { raw: normalized, subject: canonicalSubject(subjectText).name, teacher, confidence: teacher ? "certain" : "review" };
   }
@@ -113,14 +127,32 @@
   }
   function oldFormatChanges(tables) {
     const found = new Map(); const unknownRows = [];
-    tables.forEach(table => table.forEach(row => {
-      const joined = row.join(" · "); const student = campus.students.find(item => key(joined).includes(key(item.fullName)));
-      if (!student) { if (/עברית|לשון|שפה/.test(joined)) unknownRows.push(joined); return; }
-      const subject = knownSubjectIn(joined); const hours = Number((joined.match(/(?:עברית|לשון|שפה|ספרות|היסטוריה|מתמטיקה|אנגלית)[^\d]{0,24}(\d+)\s*(?:שעות?|שעו?ת)?/i) || [])[1]);
-      if (subject && Number.isInteger(hours) && hours > 0) found.set(`${student.id}|${subject}`, { kind: "request", student, subject, hours });
-      const day = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"].find(item => joined.includes(item)); const period = Number((joined.match(/(?:שעה|שעור)\s*([0-8])/i) || [])[1]);
-      if (subject && day && Number.isInteger(period)) found.set(`${student.id}|${subject}|${day}|${period}`, { kind: "reservation", student, subject, day, period });
-    }));
+    const days = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
+    tables.forEach(table => {
+      let currentStudent = null; let currentSubject = null;
+      table.forEach(row => {
+        const cells = row.map(clean); const joined = cells.join(" · ");
+        const explicitStudent = campus.students.find(item => cells.some(cell => key(cell).includes(key(item.fullName))));
+        if (explicitStudent) currentStudent = explicitStudent;
+        const supportCell = cells.find(cell => knownSubjectIn(cell) && /שעות?|שעו?ת/u.test(cell));
+        const detectedSubject = knownSubjectIn(supportCell || joined);
+        if (detectedSubject) currentSubject = detectedSubject;
+        if (!currentStudent || !currentSubject) { if (/עברית|לשון|שפה/.test(joined)) unknownRows.push(joined); return; }
+        if (supportCell) {
+          const hoursMatch = supportCell.match(/(\d+)\s*(?:שעות?|שעו?ת)/u) || supportCell.match(/(?:שעות?|שעו?ת)\s*(\d+)/u);
+          const hours = Number(hoursMatch?.[1]);
+          if (Number.isInteger(hours) && hours > 0) found.set(`${currentStudent.id}|${currentSubject}`, { kind: "request", student: currentStudent, subject: currentSubject, hours });
+          else unknownRows.push(joined);
+        }
+        cells.forEach((cell, index) => {
+          const day = days.find(item => cell.includes(item)); if (!day) return;
+          const neighbours = [cells[index + 1], cells[index - 1]].filter(Boolean);
+          const periodCell = neighbours.find(value => /^(?:שעה|שעור)?\s*[0-8]$/u.test(value)) || cell;
+          const period = Number((periodCell.match(/(?:שעה|שעור)?\s*([0-8])/u) || [])[1]);
+          if (Number.isInteger(period)) found.set(`${currentStudent.id}|${currentSubject}|${day}|${period}`, { kind: "reservation", student: currentStudent, subject: currentSubject, day, period });
+        });
+      });
+    });
     return { changes: [...found.values()], unknownRows };
   }
   async function scanLegacyDocument() {
@@ -185,7 +217,7 @@
   function archiveYear() {
     if (!campus.students.length && !campus.subjects.length) return showToast("אין עדיין נתונים לשמירה בצילום שנתי.");
     if (!confirm(`ליצור צילום לקריאה בלבד של ${campus.school} · ${campus.year}? המאגר הפעיל לא ישתנה.`)) return;
-    campus.archives.unshift({ id: `archive-${Date.now()}`, school: campus.school, year: campus.year, createdAt: new Date().toISOString(), students: structuredClone(campus.students), subjects: structuredClone(campus.subjects), assignments: structuredClone(campus.assignments || []) });
+    campus.archives.unshift({ id: `archive-${Date.now()}`, school: campus.school, year: campus.year, createdAt: new Date().toISOString(), students: structuredClone(campus.students), subjects: structuredClone(campus.subjects), assignments: structuredClone(campus.assignments || []), projects: structuredClone(campus.projects || []) });
     saveCampus(); render(); showToast("צילום סוף השנה נשמר לקריאה בלבד.");
   }
   function viewArchive(id) {
@@ -211,18 +243,18 @@
     saveCampus(); elements.requestsDialog.close(); render(); showToast("הזכאויות נשמרו במאגר.");
   }
   function exportCampus() {
-    const backup = { kind: "differential-campus-backup", schemaVersion: 1, exportedAt: new Date().toISOString(), campus };
-    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" })); link.download = `מאגר-${campus.school || "תיכון"}-${campus.year || "ללא-שנה"}.json`; link.click(); URL.revokeObjectURL(link.href); showToast("גיבוי מלא של המאגר הורד למחשב.");
+    const backup = { kind: "differential-campus-backup", schemaVersion: 2, exportedAt: new Date().toISOString(), campus };
+    const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" })); link.download = `מאגר-${campus.school || "תיכון"}-${campus.year || "ללא-שנה"}.json`; link.click(); URL.revokeObjectURL(link.href); showToast(`גיבוי מלא הורד: ${campus.students.length} תלמידים ו־${(campus.projects || []).length} מקצועות פעילים.`);
   }
   async function restoreCampus(file) {
     if (!file) return;
     try {
       const data = JSON.parse(await file.text());
       if (data?.kind !== "differential-campus-backup" || !data.campus || !Array.isArray(data.campus.students) || !Array.isArray(data.campus.subjects)) throw new Error("זה אינו קובץ גיבוי תקין של מאגר התיכון.");
-      const next = { ...defaultCampus(), ...data.campus, students: data.campus.students, subjects: data.campus.subjects, assignments: Array.isArray(data.campus.assignments) ? data.campus.assignments : [], archives: Array.isArray(data.campus.archives) ? data.campus.archives : [] };
-      const preview = `תצוגה מקדימה לשחזור:\n${next.school || "ללא שם"} · ${next.year || "ללא שנה"}\n${next.students.length} תלמידים, ${next.subjects.length} מקצועות ו־${next.assignments.length} שיבוצים דיפרנציאליים.\n\nהמאגר המקומי הנוכחי יוחלף. להמשיך?`;
+      const next = { ...defaultCampus(), ...data.campus, students: data.campus.students, subjects: data.campus.subjects, assignments: Array.isArray(data.campus.assignments) ? data.campus.assignments : [], projects: Array.isArray(data.campus.projects) ? data.campus.projects : [], archives: Array.isArray(data.campus.archives) ? data.campus.archives : [] };
+      const preview = `תצוגה מקדימה לשחזור:\n${next.school || "ללא שם"} · ${next.year || "ללא שנה"}\n${next.students.length} תלמידים, ${next.subjects.length} מקצועות, ${next.projects.length} סביבות עבודה ו־${next.assignments.length} שיבוצים דיפרנציאליים.\n\nהמאגר המקומי הנוכחי יוחלף. להמשיך?`;
       if (!confirm(preview)) return;
-      campus = next; saveCampus(); render(); showToast("הגיבוי שוחזר בהצלחה.");
+      campus = next; localStorage.removeItem("differential-active-project-v1"); saveCampus(); render(); showToast("הגיבוי המלא שוחזר. פתחו מקצוע מהרשימה כדי להמשיך לעבוד בו.");
     } catch (error) { showToast(error instanceof Error ? error.message : "לא ניתן לשחזר את הקובץ."); }
     finally { elements.restore.value = ""; }
   }
@@ -234,7 +266,20 @@
     report.document.write(`<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><title>דו״ח כולל</title><style>@page{size:A4 landscape;margin:12mm}body{font:14px Arial;color:#17345f}h1{margin:0 0 5px}p{color:#607287}table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:9px;border:1px solid #cfd9e6;text-align:right;vertical-align:top}th{background:#1f4d7b;color:#fff}@media print{button{display:none}}</style><body><button onclick="print()">הדפסה או שמירה כ־PDF</button><h1>דו״ח דיפרנציאלי כולל</h1><p>${esc(campus.school)} · ${esc(campus.year)}</p><table><thead><tr><th>תלמיד/ה</th><th>כיתה</th><th>זכאויות</th><th>שיבוצים בכל המקצועות</th></tr></thead><tbody>${rows}</tbody></table></body></html>`); report.document.close();
   }
   elements.save.addEventListener("click", () => { const school = clean(elements.school.value); const year = clean(elements.year.value); if (!school || !year) return showToast("יש למלא את שם התיכון ואת שנת הלימודים."); campus.school = school; campus.year = year; saveCampus(); render(); showToast("מאגר התיכון הוגדר ונשמר."); });
-  elements.manualForm.addEventListener("submit", event => { event.preventDefault(); const name = clean(elements.manualName.value); if (!name) return showToast("יש להזין שם מקצוע."); addSubject(name, split(elements.manualAliases.value)); saveCampus(); elements.manualName.value = ""; elements.manualAliases.value = ""; render(); showToast("המקצוע נוסף למאגר."); });
+  elements.manualForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const name = clean(elements.manualName.value);
+    if (!name) return showToast("יש להזין שם מקצוע.");
+    const canonical = canonicalSubject(name);
+    const existing = campus.subjects.find(subject => key(subject.name) === key(canonical.name));
+    if (existing) {
+      const project = projectForSubject(existing);
+      if (project && confirm(`המקצוע „${existing.name}” כבר קיים.\n\nאישור — מעבר לסביבת העבודה הקיימת\nביטול — חזרה ובחירת שם חדש`)) return activateProject(project);
+      elements.manualName.focus();
+      return showToast(`השם „${existing.name}” כבר בשימוש. בחרו שם של מקצוע חדש${project ? " או פתחו את המקצוע הקיים מהרשימה" : ""}.`);
+    }
+    addSubject(name, split(elements.manualAliases.value)); saveCampus(); elements.manualName.value = ""; elements.manualAliases.value = ""; render(); showToast("המקצוע נוסף למאגר.");
+  });
   elements.listForm.addEventListener("submit", event => { event.preventDefault(); const values = split(elements.list.value); if (!values.length) return showToast("הדביקו לפחות מקצוע אחד."); prepareSubjects(values, "הצעת מקצועות מהרשימה"); });
   elements.scan.addEventListener("click", scanSchedules); elements.archive.addEventListener("click", archiveYear);
   elements.legacyScan.addEventListener("click", scanLegacyDocument);
@@ -252,8 +297,18 @@
   elements.addRequestRow.addEventListener("click", () => elements.requestRows.insertAdjacentHTML("beforeend", requestRow()));
   elements.requestRows.addEventListener("click", event => { const button = event.target.closest("[data-remove-campus-request]"); if (button && elements.requestRows.querySelectorAll(".request-row").length > 1) button.closest(".request-row").remove(); });
   elements.saveRequests.addEventListener("click", saveRequests);
-  elements.subjectList.addEventListener("click", event => { const button = event.target.closest("[data-open-subject]"); if (!button) return; const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return; localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] })); location.href = "setup.html"; });
+  elements.subjectList.addEventListener("click", event => {
+    const button = event.target.closest("[data-open-subject]"); if (!button) return;
+    const subject = campus.subjects.find(item => item.id === button.dataset.openSubject); if (!subject) return;
+    const existingProject = projectForSubject(subject);
+    if (existingProject) {
+      activateProject(existingProject);
+      return;
+    }
+    localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] }));
+    location.href = "setup.html";
+  });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
 })();

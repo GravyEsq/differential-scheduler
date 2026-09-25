@@ -66,6 +66,25 @@
     } catch (_) { /* Opening a project manually remains fully supported. */ }
     return null;
   }
+  function loadCampus() {
+    try {
+      const campus = JSON.parse(localStorage.getItem(campusStorageKey));
+      return campus && typeof campus === "object" ? campus : null;
+    } catch (_) { return null; }
+  }
+  function subjectKey(value) { return clean(value).toLocaleLowerCase("he").replace(/["׳״'`.,:;()\[\]{}]/g, "").replace(/[-–—]/g, " ").replace(/\s+/g, " "); }
+  function existingProjectForSubject(subject) {
+    return (loadCampus()?.projects || []).find(project => subjectKey(project?.meta?.subject) === subjectKey(subject));
+  }
+  function openExistingProject(project) {
+    const id = String(project?.meta?.id || `${project?.meta?.school || "school"}-${project?.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
+    localStorage.setItem(activeProjectKey, JSON.stringify(project));
+    localStorage.setItem(`differential-project-${id}-assignments-v1`, JSON.stringify(project?.schedule?.assignments || []));
+    localStorage.setItem(`differential-project-${id}-locks-v1`, JSON.stringify(project?.locks || {}));
+    localStorage.setItem(`differential-project-${id}-constraints-v1`, JSON.stringify(project?.constraints || []));
+    localStorage.setItem(`differential-project-${id}-share-v1`, JSON.stringify(project?.shareWilling || {}));
+    location.href = "app.html";
+  }
 
   function applyCampusSubjectHint() {
     const hint = loadCampusSubjectHint();
@@ -73,8 +92,9 @@
     elements.subject.value = hint.name;
     elements.aliases.value = (hint.aliases || []).join(", ");
     try {
-      const campus = JSON.parse(localStorage.getItem(campusStorageKey));
+      const campus = loadCampus();
       if (campus?.school) elements.school.value = campus.school;
+      if (campus?.year) elements.year.value = campus.year;
     } catch (_) { /* The subject still works without a campus title. */ }
     elements.campusProjectHint.hidden = false;
     elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נבחר מהמאגר</strong><p>אפשר לשנות את הפרטים, או להמשיך למסך השיבוץ.</p></div>`;
@@ -629,6 +649,16 @@
         elements.form.reportValidity();
         return false;
       }
+      const existingProject = existingProjectForSubject(elements.subject.value);
+      if (existingProject) {
+        const moveToExisting = confirm(`כבר קיימת סביבת עבודה למקצוע „${existingProject.meta.subject}”.\n\nאישור — מעבר למקצוע הקיים\nביטול — חזרה לבחירת שם חדש`);
+        if (moveToExisting) openExistingProject(existingProject);
+        else {
+          elements.message.textContent = `השם „${existingProject.meta.subject}” כבר בשימוש. בחרו שם של מקצוע חדש.`;
+          elements.subject.focus();
+        }
+        return false;
+      }
     }
     if (state.step === 1 && state.studentErrors.length) {
       elements.message.textContent = state.studentErrors[0];
@@ -732,5 +762,5 @@
   applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
 })();

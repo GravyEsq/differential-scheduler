@@ -49,6 +49,7 @@
   const campusStorageKey = "differential-campus-v1";
   const lastBackupKey = "differential-last-backup-v1";
   const maxBackupBytes = 15 * 1024 * 1024;
+  const subjectKey = value => String(value || "").trim().toLocaleLowerCase("he").replace(/["׳״'`.,:;()\[\]{}]/g, "").replace(/[-–—]/g, " ").replace(/\s+/g, " ");
   const defaultLocks = { ...(draft.defaultLocks || {}) };
   const originalAssignments = draft.assignments.map((item, index) => ({ ...item, id: `lesson-${index + 1}` }));
   let assignments = loadSavedAssignments();
@@ -282,9 +283,9 @@
   function loadCampusStore() {
     try {
       const stored = JSON.parse(localStorage.getItem(campusStorageKey));
-      if (stored && typeof stored === "object") return { ...stored, students: Array.isArray(stored.students) ? stored.students : [], subjects: Array.isArray(stored.subjects) ? stored.subjects : [], assignments: Array.isArray(stored.assignments) ? stored.assignments : [], archives: Array.isArray(stored.archives) ? stored.archives : [] };
+      if (stored && typeof stored === "object") return { ...stored, students: Array.isArray(stored.students) ? stored.students : [], subjects: Array.isArray(stored.subjects) ? stored.subjects : [], assignments: Array.isArray(stored.assignments) ? stored.assignments : [], projects: Array.isArray(stored.projects) ? stored.projects : [], archives: Array.isArray(stored.archives) ? stored.archives : [] };
     } catch (_) { /* The project registry remains available on its own. */ }
-    return { schemaVersion: 1, school: projectMeta.school || "", year: projectMeta.year || "", students: [], subjects: [], assignments: [], archives: [] };
+    return { schemaVersion: 2, school: projectMeta.school || "", year: projectMeta.year || "", students: [], subjects: [], assignments: [], projects: [], archives: [] };
   }
 
   function loadUndoHistory() {
@@ -386,7 +387,9 @@
   }
 
   function saveLocks() {
-    if (safeLocalSet(lockStorageKey, JSON.stringify(activeLocks))) markSaved();
+    const saved = safeLocalSet(lockStorageKey, JSON.stringify(activeLocks));
+    const campusSaved = syncCampusProject();
+    if (saved || campusSaved) markSaved();
   }
 
   function saveAssignments() {
@@ -399,6 +402,30 @@
     const currentProjectAssignments = assignments.map(item => ({ ...item, campusProjectId: projectId, subject: projectMeta.subject, subjectAliases: projectMeta.aliases || [], updatedAt: new Date().toISOString() }));
     const replacesLegacyReservation = item => item.legacyReservation && currentProjectAssignments.some(current => current.student === item.student && current.day === item.day && current.period === item.period && String(current.subject || projectMeta.subject) === String(item.subject));
     campusStore.assignments = [...(campusStore.assignments || []).filter(item => item.campusProjectId !== projectId && !replacesLegacyReservation(item)), ...currentProjectAssignments];
+    campusStore.school = campusStore.school || projectMeta.school || "";
+    campusStore.year = campusStore.year || projectMeta.year || "";
+    return syncCampusProject();
+  }
+
+  function currentProjectSnapshot() {
+    payload.meta = projectMeta;
+    payload.schedule = { ...draft, assignments };
+    payload.locks = activeLocks;
+    payload.constraints = activeConstraints;
+    payload.shareWilling = shareWilling;
+    payload.studentRegistry = studentRegistry;
+    return structuredClone(payload);
+  }
+
+  function syncCampusProject() {
+    campusStore.schemaVersion = Math.max(2, Number(campusStore.schemaVersion) || 1);
+    campusStore.projects = Array.isArray(campusStore.projects) ? campusStore.projects : [];
+    const snapshot = currentProjectSnapshot();
+    const existingIndex = campusStore.projects.findIndex(project => project?.meta?.id === projectMeta.id || subjectKey(project?.meta?.subject) === subjectKey(projectMeta.subject));
+    if (existingIndex >= 0) campusStore.projects[existingIndex] = snapshot;
+    else campusStore.projects.push(snapshot);
+    const subject = (campusStore.subjects || []).find(item => subjectKey(item.name) === subjectKey(projectMeta.subject));
+    if (!subject) campusStore.subjects.push({ id: `subject-${Date.now()}`, name: projectMeta.subject, aliases: projectMeta.aliases || [], suggestedTeachers: [] });
     campusStore.school = campusStore.school || projectMeta.school || "";
     campusStore.year = campusStore.year || projectMeta.year || "";
     campusStore.updatedAt = new Date().toISOString();
@@ -416,11 +443,15 @@
   }
 
   function saveConstraints() {
-    if (safeLocalSet(constraintStorageKey, JSON.stringify(activeConstraints))) markSaved();
+    const saved = safeLocalSet(constraintStorageKey, JSON.stringify(activeConstraints));
+    const campusSaved = syncCampusProject();
+    if (saved || campusSaved) markSaved();
   }
 
   function saveShareWilling() {
-    if (safeLocalSet(shareStorageKey, JSON.stringify(shareWilling))) markSaved();
+    const saved = safeLocalSet(shareStorageKey, JSON.stringify(shareWilling));
+    const campusSaved = syncCampusProject();
+    if (saved || campusSaved) markSaved();
   }
 
   function saveStudentRegistry() {
@@ -429,7 +460,7 @@
     campusStore.year = campusStore.year || projectMeta.year || "";
     campusStore.updatedAt = new Date().toISOString();
     const savedLegacy = safeLocalSet(registryStorageKey, JSON.stringify(studentRegistry));
-    const savedCampus = safeLocalSet(campusStorageKey, JSON.stringify(campusStore));
+    const savedCampus = syncCampusProject();
     if (savedLegacy || savedCampus) markSaved();
   }
 
@@ -2012,7 +2043,9 @@
     assignmentLimits.set(name, quota);
     payload.schedule = draft;
     payload.teacherAvailability.teachers = [...teacherData.values()];
-    if (safeLocalSet(activeProjectKey, JSON.stringify(payload))) markSaved();
+    const savedProject = safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    const savedCampus = syncCampusProject();
+    if (savedProject || savedCampus) markSaved();
     refreshTeacherFilter();
     elements.teacherEditorDialog.close();
     renderTeamManager();
@@ -2327,6 +2360,26 @@
   function saveProjectSettings() {
     const subject = document.querySelector("#settingsSubject").value.trim();
     if (!subject) return alert("יש להזין מקצוע.");
+    const duplicate = (campusStore.projects || []).find(project => project?.meta?.id !== projectMeta.id && subjectKey(project?.meta?.subject) === subjectKey(subject));
+    if (duplicate) {
+      const openExisting = confirm(`כבר קיימת סביבת עבודה למקצוע „${subject}”.\n\nאישור — מעבר למקצוע הקיים\nביטול — חזרה ובחירת שם חדש`);
+      if (openExisting) {
+        const existingId = String(duplicate?.meta?.id || `${duplicate?.meta?.school || "school"}-${duplicate?.meta?.subject || "subject"}`).replace(/[^a-zA-Z0-9א-ת_-]+/g, "-");
+        safeLocalSet(activeProjectKey, JSON.stringify(duplicate));
+        safeLocalSet(`differential-project-${existingId}-assignments-v1`, JSON.stringify(duplicate?.schedule?.assignments || []));
+        safeLocalSet(`differential-project-${existingId}-locks-v1`, JSON.stringify(duplicate?.locks || {}));
+        safeLocalSet(`differential-project-${existingId}-constraints-v1`, JSON.stringify(duplicate?.constraints || []));
+        safeLocalSet(`differential-project-${existingId}-share-v1`, JSON.stringify(duplicate?.shareWilling || {}));
+        location.reload();
+      } else {
+        const input = document.querySelector("#settingsSubject");
+        input.setCustomValidity(`השם „${subject}” כבר בשימוש. יש לבחור שם של מקצוע חדש.`);
+        input.reportValidity();
+        input.addEventListener("input", () => input.setCustomValidity(""), { once: true });
+        input.focus();
+      }
+      return;
+    }
     projectMeta.school = document.querySelector("#settingsSchool").value.trim();
     projectMeta.year = document.querySelector("#settingsYear").value.trim();
     projectMeta.team = document.querySelector("#settingsTeam").value.trim();
@@ -2336,6 +2389,7 @@
     projectMeta.avoidPeriods = document.querySelector("#settingsAvoidPeriods").value.split(",").map(Number).filter(period => Number.isInteger(period) && period >= 0 && period <= MAX_SCHEDULING_PERIOD);
     payload.meta = projectMeta;
     safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    syncCampusProject();
     document.querySelector("#projectEyebrow").textContent = `${projectMeta.school || "בית הספר"} · ${projectMeta.year || ""}`;
     document.querySelector("#projectTitle").textContent = `שיבוצי ${projectMeta.subject} דיפרנציאליים`;
     elements.settingsDialog.close();
@@ -2411,7 +2465,9 @@
     assignmentLimits.set(teacherName, maximum);
     payload.schedule = draft;
     payload.teacherAvailability.teachers = [...teacherData.values()];
-    if (safeLocalSet(activeProjectKey, JSON.stringify(payload))) markSaved();
+    const savedProject = safeLocalSet(activeProjectKey, JSON.stringify(payload));
+    const savedCampus = syncCampusProject();
+    if (savedProject || savedCampus) markSaved();
     elements.teacherRulesDialog.close();
     renderAll();
     showToast(`הגדרות ${teacherName} נשמרו ונכללות בסידור המערכת.`);
@@ -2873,7 +2929,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
