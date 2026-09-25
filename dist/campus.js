@@ -121,9 +121,19 @@
   }
   function knownSubjectIn(text) {
     const source = key(text);
-    const options = [...campus.subjects.flatMap(subject => [subject.name, ...(subject.aliases || [])]), "עברית", "לשון", "שפה"];
+    const requestSubjects = campus.students.flatMap(student => (student.requests || []).map(request => request.subject));
+    const options = [...campus.subjects.flatMap(subject => [subject.name, ...(subject.aliases || [])]), ...requestSubjects, ...[...SUBJECT_ALIASES.values()].flat()]
+      .filter(Boolean).sort((first, second) => key(second).length - key(first).length);
     const match = options.find(subject => source.includes(key(subject)));
     return match ? canonicalSubject(match).name : null;
+  }
+  function studentFromLegacyCell(cell) {
+    const sourceTokens = new Set(key(cell).split(/\s+/).filter(token => token.length > 1));
+    const ranked = campus.students.map(student => {
+      const tokens = key(student.fullName).split(/\s+/).filter(token => token.length > 1);
+      return { student, score: tokens.filter(token => sourceTokens.has(token)).length };
+    }).filter(item => item.score >= 2).sort((first, second) => second.score - first.score);
+    return ranked.length && (!ranked[1] || ranked[0].score > ranked[1].score) ? ranked[0].student : null;
   }
   function oldFormatChanges(tables) {
     const found = new Map(); const unknownRows = [];
@@ -132,24 +142,28 @@
       let currentStudent = null; let currentSubject = null;
       table.forEach(row => {
         const cells = row.map(clean); const joined = cells.join(" · ");
-        const explicitStudent = campus.students.find(item => cells.some(cell => key(cell).includes(key(item.fullName))));
+        const explicitStudent = cells.filter(Boolean).map(studentFromLegacyCell).find(Boolean);
         if (explicitStudent) currentStudent = explicitStudent;
-        const supportCell = cells.find(cell => knownSubjectIn(cell) && /שעות?|שעו?ת/u.test(cell));
-        const detectedSubject = knownSubjectIn(supportCell || joined);
+        else if (cells[0] && !/שם\s*התלמיד/u.test(cells[0])) currentStudent = null;
+        const supportCell = cells[1] || cells.find(cell => knownSubjectIn(cell) && /^\s*\d+\s+/u.test(cell));
+        const detectedSubject = supportCell ? knownSubjectIn(supportCell) : null;
         if (detectedSubject) currentSubject = detectedSubject;
         if (!currentStudent || !currentSubject) { if (/עברית|לשון|שפה/.test(joined)) unknownRows.push(joined); return; }
-        if (supportCell) {
-          const hoursMatch = supportCell.match(/(\d+)\s*(?:שעות?|שעו?ת)/u) || supportCell.match(/(?:שעות?|שעו?ת)\s*(\d+)/u);
+        if (supportCell && detectedSubject) {
+          const hoursMatch = supportCell.match(/^\s*(\d+)\s+/u) || supportCell.match(/(\d+)\s*(?:שעות?|שעו?ת)/u) || supportCell.match(/(?:שעות?|שעו?ת)\s*(\d+)/u);
           const hours = Number(hoursMatch?.[1]);
           if (Number.isInteger(hours) && hours > 0) found.set(`${currentStudent.id}|${currentSubject}`, { kind: "request", student: currentStudent, subject: currentSubject, hours });
           else unknownRows.push(joined);
         }
-        cells.forEach((cell, index) => {
-          const day = days.find(item => cell.includes(item)); if (!day) return;
-          const neighbours = [cells[index + 1], cells[index - 1]].filter(Boolean);
-          const periodCell = neighbours.find(value => /^(?:שעה|שעור)?\s*[0-8]$/u.test(value)) || cell;
-          const period = Number((periodCell.match(/(?:שעה|שעור)?\s*([0-8])/u) || [])[1]);
-          if (Number.isInteger(period)) found.set(`${currentStudent.id}|${currentSubject}|${day}|${period}`, { kind: "reservation", student: currentStudent, subject: currentSubject, day, period });
+        const dayCellIndex = cells.findIndex(cell => days.some(day => cell.includes(day)));
+        if (dayCellIndex < 0) return;
+        const rowDays = [...cells[dayCellIndex].matchAll(/ראשון|שני|שלישי|רביעי|חמישי/gu)].map(match => match[0]);
+        const periodCell = cells[dayCellIndex + 1] || "";
+        const periods = [...periodCell.matchAll(/(?:^|\D)([0-8])(?=\D|$)/gu)].map(match => Number(match[1]));
+        const teacher = clean((cells[dayCellIndex + 2] || "").replace(/\s*\([^)]*\).*$/u, "").replace(/\s+עח\b.*$/u, ""));
+        rowDays.forEach((day, index) => {
+          const period = periods[index] ?? (periods.length === 1 ? periods[0] : null);
+          if (Number.isInteger(period)) found.set(`${currentStudent.id}|${currentSubject}|${day}|${period}`, { kind: "reservation", student: currentStudent, subject: currentSubject, day, period, teacher });
         });
       });
     });
@@ -171,7 +185,7 @@
   }
   function applyLegacyImport() {
     if (!pendingLegacyImport) return; const selected = new Set([...elements.legacyPreview.querySelectorAll("[data-legacy-change]:checked")].map(input => Number(input.dataset.legacyChange)));
-    pendingLegacyImport.changes.forEach((change, index) => { if (!selected.has(index)) return; if (change.kind === "request") { const other = (change.student.requests || []).filter(item => key(item.subject) !== key(change.subject)); change.student.requests = [...other, { subject: change.subject, hours: change.hours }]; addSubject(change.subject); } else { const known = (campus.assignments || []).find(item => item.student === change.student.fullName && item.subject === change.subject); campus.assignments = [...(campus.assignments || []).filter(item => !(item.legacyReservation && item.student === change.student.fullName && item.subject === change.subject && item.day === change.day && item.period === change.period)), { id: `legacy-${Date.now()}-${index}`, campusProjectId: "legacy-format", legacyReservation: true, student: change.student.fullName, grade: change.student.grade, teacher: known?.teacher || "יש לשייך מורה", subject: change.subject, day: change.day, period: change.period, updatedAt: new Date().toISOString() }]; } });
+    pendingLegacyImport.changes.forEach((change, index) => { if (!selected.has(index)) return; if (change.kind === "request") { const other = (change.student.requests || []).filter(item => key(item.subject) !== key(change.subject)); change.student.requests = [...other, { subject: change.subject, hours: change.hours }]; addSubject(change.subject); } else { const known = (campus.assignments || []).find(item => item.student === change.student.fullName && item.subject === change.subject); campus.assignments = [...(campus.assignments || []).filter(item => !(item.legacyReservation && item.student === change.student.fullName && item.subject === change.subject && item.day === change.day && item.period === change.period)), { id: `legacy-${Date.now()}-${index}`, campusProjectId: "legacy-format", legacyReservation: true, student: change.student.fullName, grade: change.student.grade, teacher: change.teacher || known?.teacher || "יש לשייך מורה", subject: change.subject, day: change.day, period: change.period, updatedAt: new Date().toISOString() }]; } });
     saveCampus(); pendingLegacyImport = null; elements.legacyPreview.hidden = true; render(); showToast("השינויים שנבחרו מהפורמט הישן נשמרו במאגר.");
   }
   async function scanSchedules() {
@@ -310,5 +324,5 @@
   });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=20").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=21").catch(() => {});
 })();
