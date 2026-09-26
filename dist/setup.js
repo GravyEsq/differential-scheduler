@@ -105,7 +105,7 @@
       loadCampusStudentsForSubject(hint, campus);
     } catch (_) { /* The subject still works without a campus title. */ }
     elements.campusProjectHint.hidden = false;
-    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נטען ממאגר התיכון</strong><p>${state.students.length} תלמידים עם זכאות במקצוע וטיוטות המורים הועברו למסך ההקמה.</p></div>`;
+    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נטען ממאגר התיכון</strong><p>${state.students.length} תלמידים עם זכאות במקצוע וטיוטות המורים הועברו למסך ההקמה.</p><a class="text-button" href="campus.html">זה לא המקצוע שרציתי — חזרה לבחירה</a></div>`;
     elements.pageTitle.textContent = `הקמת מקצוע · ${hint.name}`;
     const teachers = hint.teachers || [];
     if (!teachers.length) return;
@@ -829,5 +829,5 @@
   applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=24").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=25").catch(() => {});
 })();
