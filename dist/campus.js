@@ -381,5 +381,5 @@
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   refreshTeacherDraftsFromStoredSchedules();
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=26").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=27").catch(() => {});
 })();

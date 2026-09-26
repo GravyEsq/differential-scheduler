@@ -398,6 +398,7 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .shadow-cell.teacher-blocked span { font-size: .62rem; font-weight: 800; }
 .shadow-cell.blocked { color: white; background: repeating-linear-gradient(-45deg, #857f91 0, #857f91 6px, #97909f 6px, #97909f 12px); }
 .shadow-cell.blocked span { font-size: .62rem; font-weight: 800; }
+.teacher-schedule-import { display: grid; gap: 8px; margin-bottom: 16px; padding: 14px; background: #f4f8ff; border: 1px solid #cfdbef; border-radius: 13px; }
 .share-consent-row { margin: 18px 22px 4px; padding: 12px 13px; display: flex; align-items: center; gap: 10px; border-radius: 9px; background: #f2f6fb; cursor: pointer; }
 .share-consent-row input { width: 18px; min-width: 18px; height: 18px; }
 .share-consent-row span { color: #42556e; font-size: .86rem; line-height: 1.45; }

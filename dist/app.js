@@ -176,6 +176,8 @@
     newTeacherMaxConsecutive: document.querySelector("#newTeacherMaxConsecutive"),
     newTeacherGrades: document.querySelector("#newTeacherGrades"),
     newTeacherPreferredGrades: document.querySelector("#newTeacherPreferredGrades"),
+    teacherScheduleFile: document.querySelector("#teacherScheduleFile"),
+    teacherScheduleStatus: document.querySelector("#teacherScheduleStatus"),
     teacherShadowGrid: document.querySelector("#teacherShadowGrid"),
     teacherShadowSummary: document.querySelector("#teacherShadowSummary"),
     teacherRulesDialog: document.querySelector("#teacherRulesDialog"),
@@ -2006,9 +2008,39 @@
     elements.newTeacherMaxConsecutive.value = source?.max_consecutive ?? "7";
     elements.newTeacherGrades.value = (source?.allowed_student_grades || []).join(", ");
     elements.newTeacherPreferredGrades.value = (source?.preferred_student_grades || []).join(", ");
+    elements.teacherScheduleFile.value = "";
+    elements.teacherScheduleStatus.textContent = source ? "אפשר להעלות מערכת Excel עדכנית ולהחליף את טיוטת השעות." : "אפשר להעלות מערכת ולבדוק את הטיוטה לפני השמירה.";
+    elements.teacherScheduleStatus.className = "file-status";
     resetTeacherShadowEditor(source);
     elements.teacherEditorDialog.showModal();
     elements.newTeacherName.focus();
+  }
+
+  async function loadTeacherScheduleFile() {
+    const [file] = elements.teacherScheduleFile.files;
+    if (!file) return;
+    elements.teacherScheduleStatus.textContent = "קורא את מערכת המורה ובונה טיוטה…";
+    elements.teacherScheduleStatus.className = "file-status";
+    try {
+      const parsed = await window.XlsxScheduleReader.parseStudentSchedule(file);
+      if (!activeTeacherEditorName && parsed.name) elements.newTeacherName.value = parsed.name;
+      resetTeacherShadowEditor(null);
+      let fixed = 0;
+      parsed.timetable.forEach(row => {
+        if (!Number.isInteger(row.period) || row.period < 0 || row.period > projectMeta.lastPeriod) return;
+        days.forEach(day => {
+          if (!String(row.lessons?.[day] || "").trim()) return;
+          teacherShadowSchedule[shadowSlotKey(day, row.period)] = "fixed";
+          fixed += 1;
+        });
+      });
+      renderTeacherShadowEditor();
+      elements.teacherScheduleStatus.textContent = `המערכת „${file.name}” נקראה: ${fixed} שיעורים סומנו כקבועים. בדקו את הטיוטה והשלימו מכסות וזמינות.`;
+      elements.teacherScheduleStatus.className = "file-status ok";
+    } catch (error) {
+      elements.teacherScheduleStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את מערכת המורה.";
+      elements.teacherScheduleStatus.className = "file-status error";
+    }
   }
 
   function saveNewTeacher() {
@@ -2795,8 +2827,9 @@
     if (action === "clear") { closeManagementDialog(); clearBoard(); }
     if (action === "reset") { closeManagementDialog(); resetLocalChanges(); }
   });
-  document.querySelector("#openTeacherEditorButton").addEventListener("click", openTeacherEditor);
+  document.querySelector("#openTeacherEditorButton").addEventListener("click", () => openTeacherEditor());
   document.querySelector("#saveNewTeacherButton").addEventListener("click", saveNewTeacher);
+  elements.teacherScheduleFile.addEventListener("change", loadTeacherScheduleFile);
   elements.teamManagerList.addEventListener("click", event => {
     const teacherName = event.target.closest("[data-edit-team-teacher]")?.dataset.editTeamTeacher;
     if (teacherName) { elements.teamManagerDialog.close(); openTeacherEditor(teacherName); }
@@ -2929,7 +2962,7 @@
   renderAll();
   if (normalizedStudentCount) showToast(`הוסרו סיומות כיתה מ־${normalizedStudentCount} שמות תלמידים.`);
   registerWebMcpTools();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=26").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=27").catch(() => {});
   window.addEventListener?.("offline", () => showToast("אין כרגע חיבור לרשת. אפשר להמשיך לעבוד; הנתונים יישמרו במכשיר."));
   window.addEventListener?.("online", () => showToast("החיבור לרשת חזר."));
 })();
