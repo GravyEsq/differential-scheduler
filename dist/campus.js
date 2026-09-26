@@ -129,6 +129,39 @@
     const teacher = teacherMatch?.[1] ? clean(teacherMatch[1]) : lineTeacher;
     return [{ raw: normalized, subject: canonicalSubject(subjectText).name, teacher, confidence: teacher ? "certain" : "review" }];
   }
+  function observedCommitmentsFor(allLessons, teacherName) {
+    const slots = new Map();
+    allLessons.filter(lesson => key(lesson.teacher) === key(teacherName) && lesson.day && Number.isInteger(lesson.period)).forEach(lesson => {
+      const slotKey = `${lesson.day}|${lesson.period}`;
+      const existing = slots.get(slotKey) || { day: lesson.day, period: lesson.period, subjects: [], source: "מערכות תלמידים" };
+      if (lesson.subject && !existing.subjects.some(subject => key(subject) === key(lesson.subject))) existing.subjects.push(lesson.subject);
+      slots.set(slotKey, existing);
+    });
+    return [...slots.values()].sort((first, second) => ["ראשון", "שני", "שלישי", "רביעי", "חמישי"].indexOf(first.day) - ["ראשון", "שני", "שלישי", "רביעי", "חמישי"].indexOf(second.day) || first.period - second.period);
+  }
+  function lessonsFromStoredSchedules() {
+    return campus.students.flatMap(student => (student.schedule?.timetable || []).flatMap(row => Object.entries(row.lessons || {}).flatMap(([day, raw]) => inferLessons(raw).map(lesson => ({ ...lesson, day, period: row.period })))));
+  }
+  function refreshTeacherDraftsFromStoredSchedules() {
+    const allLessons = lessonsFromStoredSchedules();
+    if (!allLessons.length || !campus.subjects.length) return;
+    let changed = false;
+    campus.subjects.forEach(subjectRecord => {
+      const subjectNames = [subjectRecord.name, ...(subjectRecord.aliases || [])];
+      const teachers = [...new Set(allLessons.filter(lesson => subjectNames.some(name => key(name) === key(lesson.subject))).map(lesson => lesson.teacher).filter(Boolean))];
+      teachers.forEach(name => {
+        const observedCommitments = observedCommitmentsFor(allLessons, name);
+        const existing = (subjectRecord.suggestedTeachers || []).find(item => key(item.name) === key(name));
+        if (existing) {
+          if (JSON.stringify(existing.observedCommitments || []) !== JSON.stringify(observedCommitments)) { existing.observedCommitments = observedCommitments; changed = true; }
+        } else {
+          subjectRecord.suggestedTeachers = [...(subjectRecord.suggestedTeachers || []), { name, confidence: "certain", source: "מערכות תלמידים", observedCommitments }];
+          changed = true;
+        }
+      });
+    });
+    if (changed) saveCampus();
+  }
   function knownSubjectIn(text) {
     const source = key(text);
     const requestSubjects = campus.students.flatMap(student => (student.requests || []).map(request => request.subject));
@@ -205,7 +238,11 @@
     try {
       const results = await Promise.all(files.map(file => window.XlsxScheduleReader.parseStudentSchedule(file)));
       const parsedStudents = results.map(result => ({ id: `student-${Date.now()}-${Math.random().toString(16).slice(2)}`, fullName: result.name || result.fileName.replace(/\.xlsx$/i, ""), grade: result.grade || "", schedule: { fileName: result.fileName, timetable: result.timetable }, requests: [], shareWilling: false, progress: {}, source: "campus-import" }));
-      const lessons = results.flatMap(result => result.timetable.flatMap(row => Object.values(row.lessons || {}).flatMap(inferLessons)));
+      const lessons = results.flatMap(result => result.timetable.flatMap(row =>
+        Object.entries(row.lessons || {}).flatMap(([day, raw]) =>
+          inferLessons(raw).map(lesson => ({ ...lesson, day, period: row.period }))
+        )
+      ));
       const bySubject = new Map();
       lessons.forEach(item => { if (!bySubject.has(item.subject)) bySubject.set(item.subject, []); bySubject.get(item.subject).push(item); });
       pendingImport = { students: parsedStudents, bySubject };
@@ -237,12 +274,13 @@
       if (previous) Object.assign(previous, { grade: student.grade || previous.grade, schedule: student.schedule, source: "campus-import" });
       else campus.students.push(student);
     });
+    const allLessons = [...pendingImport.bySubject.values()].flat();
     selected.forEach(({ source, target }) => {
       const lessons = pendingImport.bySubject.get(source) || [];
       addSubject(target, key(source) === key(target) ? [] : [source]);
       const record = campus.subjects.find(item => key(item.name) === key(canonicalSubject(target).name));
       const teachers = [...new Set(lessons.map(item => item.teacher).filter(Boolean))];
-      record.suggestedTeachers = [...new Map([...(record.suggestedTeachers || []).map(item => [key(item.name), item]), ...teachers.map(name => [key(name), { name, confidence: "certain", source: "מערכת תלמידים" }])]).values()];
+      record.suggestedTeachers = [...new Map([...(record.suggestedTeachers || []).map(item => [key(item.name), item]), ...teachers.map(name => [key(name), { name, confidence: "certain", source: "מערכות תלמידים", observedCommitments: observedCommitmentsFor(allLessons, name) }])]).values()];
     });
     saveCampus(); pendingImport = null; elements.scanPreview.hidden = true; render(); showToast("הנתונים אושרו ונשמרו במאגר התיכון.");
   }
@@ -341,6 +379,7 @@
     location.href = "setup.html";
   });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
+  refreshTeacherDraftsFromStoredSchedules();
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=22").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=23").catch(() => {});
 })();

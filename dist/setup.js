@@ -24,6 +24,7 @@
   let teacherShadowMode = "blocked";
   let teacherShadowDrawing = false;
   let teacherShadowPaintedSlots = new Set();
+  let teacherShadowLabels = new Map();
 
   const elements = {
     form: document.querySelector("#projectForm"),
@@ -101,8 +102,8 @@
     const teachers = hint.teachers || [];
     if (!teachers.length) { localStorage.removeItem(newProjectSubjectKey); return; }
     elements.campusTeacherSuggestions.hidden = false;
-    elements.campusTeacherSuggestions.innerHTML = `<strong>מורות שזוהו במערכות תלמידים</strong><span>לחיצה תמלא את השם; עדיין יש לבנות זמינות ומכסות.</span><div>${teachers.map(item => `<button type="button" data-campus-teacher="${esc(item.name)}">${esc(item.name)}</button>`).join("")}</div>`;
-    elements.campusTeacherSuggestions.querySelectorAll("[data-campus-teacher]").forEach(button => button.addEventListener("click", () => { elements.manualTeacherName.value = button.dataset.campusTeacher; elements.manualTeacherName.focus(); }));
+    elements.campusTeacherSuggestions.innerHTML = `<strong>טיוטות מורים שזוהו במערכות התלמידים</strong><span>לחיצה תטען את השם ואת השיעורים שנצפו. זו טיוטה חלקית: יש לבדוק ולסמן גם את השעות הפנויות או הגמישות.</span><div>${teachers.map((item, index) => `<button type="button" data-campus-teacher-index="${index}">${esc(item.name)}${item.observedCommitments?.length ? ` · ${item.observedCommitments.length} שיעורים` : ""}</button>`).join("")}</div>`;
+    elements.campusTeacherSuggestions.querySelectorAll("[data-campus-teacher-index]").forEach(button => button.addEventListener("click", () => applyTeacherDraft(teachers[Number(button.dataset.campusTeacherIndex)])));
     localStorage.removeItem(newProjectSubjectKey);
   }
 
@@ -124,11 +125,28 @@
 
   function resetTeacherShadow() {
     teacherShadowSchedule = {};
+    teacherShadowLabels = new Map();
     DAYS.forEach(day => {
       for (let period = 0; period <= 9; period += 1) teacherShadowSchedule[teacherShadowKey(day, period)] = "free";
     });
     teacherShadowMode = "blocked";
     renderTeacherShadow();
+  }
+
+  function applyTeacherDraft(teacher) {
+    if (!teacher?.name) return;
+    resetTeacherShadow();
+    (teacher.observedCommitments || []).forEach(item => {
+      if (!DAYS.includes(item.day) || !Number.isInteger(item.period) || item.period < 0 || item.period > 9) return;
+      const slotKey = teacherShadowKey(item.day, item.period);
+      teacherShadowSchedule[slotKey] = "fixed";
+      teacherShadowLabels.set(slotKey, (item.subjects || []).join(" / "));
+    });
+    elements.manualTeacherName.value = teacher.name;
+    renderTeacherShadow();
+    const count = teacher.observedCommitments?.length || 0;
+    setManualTeacherMessage(count ? `נטענה טיוטה עבור ${teacher.name}: ${count} שיעורים קבועים שזוהו במערכות התלמידים. המידע חלקי ויש להשלים זמינות.` : `השם ${teacher.name} נטען, אך לא נמצאו עבורה שעות חד־משמעיות.`);
+    elements.manualTeacherName.focus();
   }
 
   function teacherShadowCounts() {
@@ -147,8 +165,9 @@
       cells.push(`<div class="shadow-period"><strong>${period}</strong><small>${esc(PERIOD_TIMES[period].start)}</small></div>`);
       DAYS.forEach(day => {
         const stateName = teacherShadowSchedule[teacherShadowKey(day, period)] || "free";
-        const label = stateName === "blocked" ? "חסום" : stateName === "fixed" ? "שיעור קבוע" : stateName === "flexible" ? "שעה גמישה" : "פנויה";
-        cells.push(`<button class="shadow-cell teacher-${stateName}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${label}"><span>${stateName === "fixed" ? "קבוע" : stateName === "flexible" ? "גמיש" : stateName === "blocked" ? "חסום" : ""}</span></button>`);
+        const sourceLabel = teacherShadowLabels.get(teacherShadowKey(day, period));
+        const label = stateName === "blocked" ? "חסום" : stateName === "fixed" ? `שיעור קבוע${sourceLabel ? `: ${sourceLabel}` : ""}` : stateName === "flexible" ? "שעה גמישה" : "פנויה";
+        cells.push(`<button class="shadow-cell teacher-${stateName}" data-teacher-shadow-day="${esc(day)}" data-teacher-shadow-period="${period}" type="button" aria-label="${esc(day)}, שעה ${period}: ${esc(label)}" title="${esc(label)}"><span>${stateName === "fixed" ? "קבוע" : stateName === "flexible" ? "גמיש" : stateName === "blocked" ? "חסום" : ""}</span></button>`);
       });
     }
     elements.manualTeacherGrid.innerHTML = cells.join("");
@@ -168,6 +187,7 @@
     const stateName = teacherShadowMode === "erase" ? "free" : teacherShadowMode;
     if (teacherShadowSchedule[key] === stateName) return;
     teacherShadowSchedule[key] = stateName;
+    teacherShadowLabels.delete(key);
     renderTeacherShadow();
   }
 
@@ -197,7 +217,7 @@
     DAYS.forEach(day => {
       for (let period = 0; period <= meta.lastPeriod; period += 1) {
         const stateName = teacherShadowSchedule?.[teacherShadowKey(day, period)] || "free";
-        if (stateName === "fixed") baseCommitments.push({ day, period });
+        if (stateName === "fixed") baseCommitments.push({ day, period, label: teacherShadowLabels.get(teacherShadowKey(day, period)) || null, source: teacherShadowLabels.has(teacherShadowKey(day, period)) ? "מערכות תלמידים" : "ידני" });
         if (stateName !== "free" && stateName !== "flexible") continue;
         const category = stateName === "flexible" ? "שעה גמישה" : "פנויה";
         candidates.push({ day, period, ...PERIOD_TIMES[period], category, replaces: category === "שעה גמישה" ? "התחייבות גמישה" : null, avoid_if_possible: meta.avoidPeriods.includes(period) });
@@ -762,5 +782,5 @@
   applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=22").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=23").catch(() => {});
 })();
