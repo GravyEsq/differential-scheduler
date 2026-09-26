@@ -10,15 +10,15 @@
     if (!file?.name?.toLowerCase().endsWith(".docx")) throw new Error("יש לבחור קובץ Word מסוג docx.");
     if (file.size > 12 * 1024 * 1024) throw new Error("קובץ Word גדול מדי לקריאה מקומית.");
     if (typeof DecompressionStream !== "function") throw new Error("הדפדפן אינו תומך בקריאת Word ישירה. מומלץ לפתוח את המערכת ב־Chrome או Edge עדכני.");
-    const buffer = await file.arrayBuffer(); const view = new DataView(buffer); const end = centralDirectory(view); const count = view.getUint16(end + 10); if (count > 2000) throw new Error("קובץ Word מורכב מדי לקריאה בטוחה."); let offset = view.getUint32(end + 16); let entry = null; let expandedSize = 0;
+    const buffer = await file.arrayBuffer(); const view = new DataView(buffer); const end = centralDirectory(view); const count = view.getUint16(end + 10, true); if (count > 2000) throw new Error("קובץ Word מורכב מדי לקריאה בטוחה."); let offset = view.getUint32(end + 16, true); let entry = null; let expandedSize = 0;
     for (let index = 0; index < count; index += 1) {
       if (view.getUint32(offset, true) !== 0x02014b50) throw new Error("לא ניתן לקרוא את קובץ Word.");
-      const compressed = view.getUint32(offset + 20, true); const uncompressed = view.getUint32(offset + 24, true); expandedSize += uncompressed; if (expandedSize > 60 * 1024 * 1024) throw new Error("קובץ Word גדול מדי לאחר פתיחה."); const compression = view.getUint16(offset + 10); const nameLength = view.getUint16(offset + 28, true); const extraLength = view.getUint16(offset + 30, true); const commentLength = view.getUint16(offset + 32, true); const localOffset = view.getUint32(offset + 42, true); const name = utf8.decode(new Uint8Array(buffer, offset + 46, nameLength));
+      const compressed = view.getUint32(offset + 20, true); const uncompressed = view.getUint32(offset + 24, true); expandedSize += uncompressed; if (expandedSize > 60 * 1024 * 1024) throw new Error("קובץ Word גדול מדי לאחר פתיחה."); const compression = view.getUint16(offset + 10, true); const nameLength = view.getUint16(offset + 28, true); const extraLength = view.getUint16(offset + 30, true); const commentLength = view.getUint16(offset + 32, true); const localOffset = view.getUint32(offset + 42, true); const name = utf8.decode(new Uint8Array(buffer, offset + 46, nameLength));
       if (name === "word/document.xml") entry = { compressed, compression, localOffset };
       offset += 46 + nameLength + extraLength + commentLength;
     }
     if (!entry) throw new Error("לא נמצאה טבלה במסמך Word.");
-    const localNameLength = view.getUint16(entry.localOffset + 26); const localExtraLength = view.getUint16(entry.localOffset + 28); const bytes = new Uint8Array(buffer, entry.localOffset + 30 + localNameLength + localExtraLength, entry.compressed);
+    const localNameLength = view.getUint16(entry.localOffset + 26, true); const localExtraLength = view.getUint16(entry.localOffset + 28, true); const bytes = new Uint8Array(buffer, entry.localOffset + 30 + localNameLength + localExtraLength, entry.compressed);
     const xmlBytes = entry.compression === 0 ? bytes : entry.compression === 8 ? new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()) : null;
     if (!xmlBytes) throw new Error("שיטת הדחיסה בקובץ Word אינה נתמכת.");
     const xml = new DOMParser().parseFromString(utf8.decode(xmlBytes), "application/xml"); if (xml.querySelector("parsererror")) throw new Error("לא ניתן לקרוא את תוכן המסמך."); return xml;
