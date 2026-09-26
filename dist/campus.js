@@ -7,7 +7,7 @@
     ["עברית", ["עברית", "לשון", "שפה"]],
     ["אנגלית", ["אנגלית"]], ["מתמטיקה", ["מתמטיקה"]], ["ספרות", ["ספרות"]],
     ["היסטוריה", ["היסטוריה"]], ["אזרחות", ["אזרחות"]], ["ביולוגיה", ["ביולוגיה"]],
-    ["פיזיקה", ["פיזיקה"]], ["כימיה", ["כימיה"]]
+    ["פיזיקה", ["פיזיקה", "פיסיקה"]], ["כימיה", ["כימיה"]]
   ]);
   const elements = {
     setup: document.querySelector("#campusSetup"), dashboard: document.querySelector("#campusDashboard"), school: document.querySelector("#campusSchool"), year: document.querySelector("#campusYear"), save: document.querySelector("#saveCampusButton"),
@@ -103,21 +103,31 @@
       saveCampus(); elements.subjectPreview.hidden = true; render(); showToast("המקצועות שנבחרו נוספו למאגר.");
     });
   }
-  function inferLesson(raw) {
+  function inferLessons(raw) {
     const source = String(raw || "").replace(/\r/g, "\n");
     const compact = clean(source);
-    const rosterMatch = compact.match(/^(.+?)\s+(?:יא|יב|י|ט)\d*\s*[-–]\s*(?:יא|יב|י|ט)\d*\s+([א-ת][א-ת\s׳״'\-]{1,40}?)\s+\[\d+\](?:\s+חדר\s*:.*)?$/u);
-    if (rosterMatch) return { raw: compact, subject: canonicalSubject(clean(rosterMatch[1])).name, teacher: clean(rosterMatch[2]), confidence: "certain" };
+    const rosterPattern = /((?:יא|יב|י|ט)\d+(?:\s*[-–]\s*(?:יא|יב|י|ט)\d+)?)\s+([^\[\]]{1,80}?)\s+\[(\d+)\]/gu;
+    const matches = [...compact.matchAll(rosterPattern)];
+    if (matches.length) {
+      let previousEnd = 0;
+      return matches.map(match => {
+        let subjectText = compact.slice(previousEnd, match.index);
+        if (previousEnd) subjectText = subjectText.slice(subjectText.lastIndexOf(",") + 1);
+        subjectText = clean(subjectText.replace(/^\([^)]*\)\s*,?\s*/u, "").replace(/^חדר\s*:[^,]*,?\s*/u, ""));
+        previousEnd = match.index + match[0].length;
+        return { raw: match[0], subject: canonicalSubject(subjectText).name, teacher: clean(match[2]), classGroup: clean(match[1]), groupNumber: match[3], confidence: "certain" };
+      }).filter(item => item.subject && !/^(חלון|הפסקה|חופשי|ללא)/.test(item.subject));
+    }
     const lines = source.split(/\n+|\s*·\s*/).map(clean).filter(Boolean).filter(line => !/^\[?\d+\]?$/.test(line) && !/^חדר\s*:/u.test(line));
-    if (!lines.length) return null;
+    if (!lines.length) return [];
     const normalized = lines.join(" · ");
     const teacherMatch = normalized.match(/(?:\bעם\b|מורה\s*:|בהנחיית)\s*([א-ת][א-ת\s׳״'\-]{1,40})/);
     let subjectText = teacherMatch ? normalized.slice(0, teacherMatch.index) : lines[0];
     subjectText = clean(subjectText.replace(/\b(?:עם|מורה)\b.*$/u, "").replace(/\([^)]*\)/g, "").replace(/\s+(?:יא|יב|י|ט)\d*\s*[-–]\s*(?:יא|יב|י|ט)\d*.*$/u, ""));
-    if (!subjectText || subjectText.length > 45 || /^(חלון|הפסקה|חופשי|ללא)/.test(subjectText)) return null;
+    if (!subjectText || subjectText.length > 45 || /^(חלון|הפסקה|חופשי|ללא)/.test(subjectText)) return [];
     const lineTeacher = lines.slice(1).find(line => /^[א-ת][א-ת\s׳״'\-]{1,40}$/.test(line) && !/^(חדר|כיתה)/.test(line)) || null;
     const teacher = teacherMatch?.[1] ? clean(teacherMatch[1]) : lineTeacher;
-    return { raw: normalized, subject: canonicalSubject(subjectText).name, teacher, confidence: teacher ? "certain" : "review" };
+    return [{ raw: normalized, subject: canonicalSubject(subjectText).name, teacher, confidence: teacher ? "certain" : "review" }];
   }
   function knownSubjectIn(text) {
     const source = key(text);
@@ -195,7 +205,7 @@
     try {
       const results = await Promise.all(files.map(file => window.XlsxScheduleReader.parseStudentSchedule(file)));
       const parsedStudents = results.map(result => ({ id: `student-${Date.now()}-${Math.random().toString(16).slice(2)}`, fullName: result.name || result.fileName.replace(/\.xlsx$/i, ""), grade: result.grade || "", schedule: { fileName: result.fileName, timetable: result.timetable }, requests: [], shareWilling: false, progress: {}, source: "campus-import" }));
-      const lessons = results.flatMap(result => result.timetable.flatMap(row => Object.values(row.lessons || {}).map(inferLesson).filter(Boolean)));
+      const lessons = results.flatMap(result => result.timetable.flatMap(row => Object.values(row.lessons || {}).flatMap(inferLessons)));
       const bySubject = new Map();
       lessons.forEach(item => { if (!bySubject.has(item.subject)) bySubject.set(item.subject, []); bySubject.get(item.subject).push(item); });
       pendingImport = { students: parsedStudents, bySubject };
@@ -208,21 +218,29 @@
   function renderScanPreview() {
     if (!pendingImport) return;
     const subjects = [...pendingImport.bySubject.entries()].sort(([first], [second]) => first.localeCompare(second, "he"));
+    const mergeOptions = [...new Set([...campus.subjects.map(subject => subject.name), ...subjects.map(([subject]) => canonicalSubject(subject).name)])].sort((first, second) => first.localeCompare(second, "he"));
     elements.scanPreview.hidden = false;
-    elements.scanPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — לא נשמר עדיין</h3><p>${pendingImport.students.length} תלמידים ייקלטו עם מערכת שעות אחת לכל תלמיד. נמצאו ${subjects.length} מקצועות.</p></div></div><div class="scan-subjects">${subjects.map(([subject, lessons]) => { const teachers = [...new Set(lessons.map(item => item.teacher).filter(Boolean))]; return `<article><label><input type="checkbox" data-import-subject="${esc(subject)}" checked /> <strong>${esc(subject)}</strong></label><span>${lessons.length} הופעות במערכות</span><small>${teachers.length ? `הצעת צוות: ${esc(teachers.join(" · "))}` : "לא זוהה שם מורה בוודאות"}</small></article>`; }).join("")}</div><div class="preview-actions"><button id="applyScheduleImport" class="primary-button" type="button">אישור וקליטת הנתונים</button><button id="discardScheduleImport" class="secondary-button" type="button">ביטול</button></div>`;
+    elements.scanPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — לא נשמר עדיין</h3><p>${pendingImport.students.length} תלמידים ייקלטו עם מערכת שעות אחת לכל תלמיד. נמצאו ${subjects.length} מקצועות. אפשר לבטל מקצוע או למזג אותו באמצעות בחירת אותו שם יעד.</p></div></div><datalist id="mergeSubjectOptions">${mergeOptions.map(subject => `<option value="${esc(subject)}"></option>`).join("")}</datalist><div class="scan-subjects">${subjects.map(([subject, lessons]) => { const teachers = [...new Set(lessons.map(item => item.teacher).filter(Boolean))]; const target = canonicalSubject(subject).name; return `<article><label class="scan-subject-title"><input type="checkbox" data-import-subject="${esc(subject)}" checked /> <strong>${esc(subject)}</strong></label><span>${lessons.length} הופעות במערכות</span><small>${teachers.length ? `צוות שזוהה: ${esc(teachers.join(" · "))}` : "לא זוהה שם מורה בוודאות"}</small><label class="merge-subject-control"><span>שמירה או מיזוג אל</span><input data-import-target="${esc(subject)}" value="${esc(target)}" list="mergeSubjectOptions" aria-label="שם היעד עבור ${esc(subject)}" /></label></article>`; }).join("")}</div><div class="preview-actions"><button id="applyScheduleImport" class="primary-button" type="button">אישור וקליטת הנתונים</button><button id="discardScheduleImport" class="secondary-button" type="button">ביטול</button></div>`;
     document.querySelector("#discardScheduleImport").addEventListener("click", () => { pendingImport = null; elements.scanPreview.hidden = true; showToast("ההצעה בוטלה; דבר לא נשמר."); });
     document.querySelector("#applyScheduleImport").addEventListener("click", applyScheduleImport);
   }
   function applyScheduleImport() {
-    const selected = new Set([...elements.scanPreview.querySelectorAll("[data-import-subject]:checked")].map(input => input.dataset.importSubject));
+    const selected = [...elements.scanPreview.querySelectorAll("[data-import-subject]:checked")].map(input => {
+      const source = input.dataset.importSubject;
+      const target = clean(elements.scanPreview.querySelector(`[data-import-target="${CSS.escape(source)}"]`)?.value);
+      return { source, target };
+    });
+    const missingTarget = selected.find(item => !item.target);
+    if (missingTarget) return showToast(`יש לבחור שם יעד עבור „${missingTarget.source}”, או לבטל את הסימון שלו.`);
     pendingImport.students.forEach(student => {
       const previous = campus.students.find(item => key(item.fullName) === key(student.fullName));
       if (previous) Object.assign(previous, { grade: student.grade || previous.grade, schedule: student.schedule, source: "campus-import" });
       else campus.students.push(student);
     });
-    [...pendingImport.bySubject.entries()].filter(([subject]) => selected.has(subject)).forEach(([subject, lessons]) => {
-      addSubject(subject);
-      const record = campus.subjects.find(item => key(item.name) === key(canonicalSubject(subject).name));
+    selected.forEach(({ source, target }) => {
+      const lessons = pendingImport.bySubject.get(source) || [];
+      addSubject(target, key(source) === key(target) ? [] : [source]);
+      const record = campus.subjects.find(item => key(item.name) === key(canonicalSubject(target).name));
       const teachers = [...new Set(lessons.map(item => item.teacher).filter(Boolean))];
       record.suggestedTeachers = [...new Map([...(record.suggestedTeachers || []).map(item => [key(item.name), item]), ...teachers.map(name => [key(name), { name, confidence: "certain", source: "מערכת תלמידים" }])]).values()];
     });
@@ -324,5 +342,5 @@
   });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=21").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=22").catch(() => {});
 })();
