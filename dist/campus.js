@@ -376,10 +376,10 @@
       return;
     }
     localStorage.setItem("differential-new-project-subject-v1", JSON.stringify({ name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] }));
-    location.href = "setup.html";
+    location.href = `setup.html?subject=${encodeURIComponent(subject.id)}`;
   });
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   refreshTeacherDraftsFromStoredSchedules();
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=23").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=24").catch(() => {});
 })();

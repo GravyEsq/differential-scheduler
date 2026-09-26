@@ -28,6 +28,7 @@
 
   const elements = {
     form: document.querySelector("#projectForm"),
+    pageTitle: document.querySelector("#setupPageTitle"),
     school: document.querySelector("#schoolInput"),
     year: document.querySelector("#yearInput"),
     team: document.querySelector("#teamInput"),
@@ -62,6 +63,11 @@
 
   function loadCampusSubjectHint() {
     try {
+      const subjectId = new URLSearchParams(location.search).get("subject");
+      if (subjectId) {
+        const subject = loadCampus()?.subjects?.find(item => item.id === subjectId);
+        if (subject?.name) return { name: subject.name, aliases: subject.aliases || [], teachers: subject.suggestedTeachers || [] };
+      }
       const value = JSON.parse(localStorage.getItem(newProjectSubjectKey));
       if (value?.name) return value;
     } catch (_) { /* Opening a project manually remains fully supported. */ }
@@ -96,15 +102,16 @@
       const campus = loadCampus();
       if (campus?.school) elements.school.value = campus.school;
       if (campus?.year) elements.year.value = campus.year;
+      loadCampusStudentsForSubject(hint, campus);
     } catch (_) { /* The subject still works without a campus title. */ }
     elements.campusProjectHint.hidden = false;
-    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נבחר מהמאגר</strong><p>אפשר לשנות את הפרטים, או להמשיך למסך השיבוץ.</p></div>`;
+    elements.campusProjectHint.innerHTML = `<span aria-hidden="true">✓</span><div><strong>המקצוע „${esc(hint.name)}” נטען ממאגר התיכון</strong><p>${state.students.length} תלמידים עם זכאות במקצוע וטיוטות המורים הועברו למסך ההקמה.</p></div>`;
+    elements.pageTitle.textContent = `הקמת מקצוע · ${hint.name}`;
     const teachers = hint.teachers || [];
-    if (!teachers.length) { localStorage.removeItem(newProjectSubjectKey); return; }
+    if (!teachers.length) return;
     elements.campusTeacherSuggestions.hidden = false;
     elements.campusTeacherSuggestions.innerHTML = `<strong>טיוטות מורים שזוהו במערכות התלמידים</strong><span>לחיצה תטען את השם ואת השיעורים שנצפו. זו טיוטה חלקית: יש לבדוק ולסמן גם את השעות הפנויות או הגמישות.</span><div>${teachers.map((item, index) => `<button type="button" data-campus-teacher-index="${index}">${esc(item.name)}${item.observedCommitments?.length ? ` · ${item.observedCommitments.length} שיעורים` : ""}</button>`).join("")}</div>`;
     elements.campusTeacherSuggestions.querySelectorAll("[data-campus-teacher-index]").forEach(button => button.addEventListener("click", () => applyTeacherDraft(teachers[Number(button.dataset.campusTeacherIndex)])));
-    localStorage.removeItem(newProjectSubjectKey);
   }
 
   function esc(value) {
@@ -117,6 +124,45 @@
 
   function splitList(value) {
     return clean(value).split(/[;,]/).map(clean).filter(Boolean);
+  }
+
+  function requestForSubject(student, hint) {
+    const names = [hint.name, ...(hint.aliases || [])].map(subjectKey);
+    return (student.requests || []).find(request => names.includes(subjectKey(request.subject)));
+  }
+
+  function campusCandidates(student, hint) {
+    const timetable = student.schedule?.timetable || [];
+    const names = [hint.name, ...(hint.aliases || [])].map(subjectKey);
+    const candidates = [];
+    DAYS.forEach(day => {
+      const rows = timetable.filter(row => Number.isInteger(row.period) && row.period >= 0 && row.period <= MAX_SCHEDULING_PERIOD).sort((first, second) => first.period - second.period);
+      const occupied = rows.filter(row => clean(row.lessons?.[day])).map(row => row.period);
+      if (!occupied.length) return;
+      const first = Math.min(...occupied); const last = Math.max(...occupied);
+      rows.forEach(row => {
+        if (student.exceptions?.noPeriodZero && row.period === 0) return;
+        const lesson = clean(row.lessons?.[day]); const lessonKey = subjectKey(lesson);
+        let category = null;
+        if (lesson && names.some(name => lessonKey.includes(name))) category = "שיעור במקצוע";
+        else if (!lesson && row.period > first && row.period < last) category = "חלון";
+        else if (!lesson && row.period === first - 1) category = "קצה לפני";
+        else if (!lesson && row.period === last + 1) category = "קצה אחרי";
+        else if (lesson && student.exceptions?.allowOtherLessons) category = "דריסת שיעור";
+        if (!category) return;
+        candidates.push({ day, period: row.period, ...PERIOD_TIMES[row.period], category, replaces_student_lesson: lesson || null, avoid_if_possible: [0, 8].includes(row.period) });
+      });
+    });
+    return candidates;
+  }
+
+  function loadCampusStudentsForSubject(hint, campus) {
+    const students = (campus?.students || []).map(student => ({ student, request: requestForSubject(student, hint) })).filter(item => item.request);
+    state.students = students.map(({ student, request }) => ({ student: student.fullName, grade: student.grade || "", required: Number(request.hours) || 0, requiredTeacher: request.requiredTeacher || "", preferredTeacher: request.preferredTeacher || "", shareWilling: Boolean(student.shareWilling), candidates: campusCandidates(student, hint) }));
+    state.studentErrors = state.students.filter(student => !student.required || !student.candidates.length).map(student => !student.required ? `לא הוגדרה מכסת שעות תקינה עבור ${student.student}` : `לא נמצאו שעות אפשריות עבור ${student.student} במערכת שנקלטה`);
+    elements.studentStatus.className = `file-status ${state.studentErrors.length ? "error" : "ok"}`;
+    const required = state.students.reduce((sum, student) => sum + student.required, 0);
+    elements.studentStatus.textContent = state.students.length ? `${state.students.length} תלמידים ו־${required} שעות זכאות נטענו ממאגר התיכון${state.studentErrors.length ? ` · ${state.studentErrors.length} דורשים בדיקה` : ""}.` : `לא נמצאו במאגר תלמידים עם זכאות ל${hint.name}. אפשר להמשיך ולפתוח מקצוע ריק, או לחזור למאגר ולעדכן זכאויות.`;
   }
 
   function teacherShadowKey(day, period) {
@@ -736,6 +782,7 @@
     try {
       const serialized = JSON.stringify(project);
       localStorage.setItem(activeProjectKey, serialized);
+      localStorage.removeItem(newProjectSubjectKey);
       window.name = `differential-project:${serialized}`;
       location.href = "app.html";
     } catch (_) {
@@ -782,5 +829,5 @@
   applyCampusSubjectHint();
   resetTeacherShadow();
   showStep(0);
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=23").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=24").catch(() => {});
 })();
