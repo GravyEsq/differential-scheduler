@@ -653,6 +653,10 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .legacy-audit.warning { border-color: #e8bd61; background: #fff9eb; }
 .legacy-audit.error { border-color: #df8f8f; background: #fff3f3; }
 .legacy-audit.notice { border-color: #8eb9dc; background: #f1f8ff; }
+.legacy-mapping-list { display: grid; gap: 10px; margin-top: 12px; }
+.legacy-mapping-list label { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(240px, 1.2fr); align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: #fff; }
+.legacy-mapping-list select { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid #b9c7d8; border-radius: 9px; background: #fff; color: #1d3150; font: inherit; }
+@media (max-width: 680px) { .legacy-mapping-list label { grid-template-columns: 1fr; } }
 
 @media (max-width: 920px) {
   .landing-nav > a:not(.landing-nav-button) { display: none; }

@@ -188,10 +188,13 @@
     }
     return row[b.length];
   }
-  function studentFromLegacyCell(cell) {
+  function studentFromLegacyCell(cell, manualMappings = new Map()) {
     const legacyName = cleanStudentName(cell);
     if (!legacyName || /שם\s*התלמיד/u.test(legacyName)) return null;
     const normalized = key(legacyName);
+    const mappedStudentId = manualMappings.get(normalized);
+    const mappedStudent = mappedStudentId ? campus.students.find(student => String(student.id || key(student.fullName)) === String(mappedStudentId)) : null;
+    if (mappedStudent) return { student: mappedStudent, legacyName, method: "manual", score: 1 };
     const exact = campus.students.find(student => key(cleanStudentName(student.fullName)) === normalized);
     if (exact) return { student: exact, legacyName, method: "exact", score: 1 };
     const sourceTokens = new Set(normalized.split(/\s+/).filter(token => token.length > 1));
@@ -205,7 +208,7 @@
     }).filter(item => item.score >= 0.78).sort((first, second) => second.score - first.score);
     return ranked.length && (!ranked[1] || ranked[0].score - ranked[1].score >= 0.08) ? ranked[0] : null;
   }
-  function oldFormatChanges(tables) {
+  function oldFormatChanges(tables, manualMappings = new Map()) {
     const found = new Map(); const unknownRows = []; const docxOnly = new Map(); const matchedStudentIds = new Set(); const fuzzyMatches = new Map();
     const days = ["ראשון", "שני", "שלישי", "רביעי", "חמישי"];
     tables.forEach(table => {
@@ -213,10 +216,10 @@
       table.forEach(row => {
         const cells = row.map(clean); const joined = cells.join(" · ");
         const firstCellName = cleanStudentName(cells[0]);
-        const explicitMatch = cells.filter(Boolean).map(studentFromLegacyCell).find(Boolean);
+        const explicitMatch = cells.filter(Boolean).map(cell => studentFromLegacyCell(cell, manualMappings)).find(Boolean);
         if (explicitMatch) {
           currentStudent = explicitMatch.student; matchedStudentIds.add(currentStudent.id || key(currentStudent.fullName));
-          if (explicitMatch.method === "fuzzy") fuzzyMatches.set(`${explicitMatch.legacyName}|${currentStudent.id || key(currentStudent.fullName)}`, explicitMatch);
+          if (explicitMatch.method !== "exact") fuzzyMatches.set(`${explicitMatch.legacyName}|${currentStudent.id || key(currentStudent.fullName)}`, explicitMatch);
         } else if (cells[0] && !/שם\s*התלמיד/u.test(cells[0])) {
           currentStudent = null;
           if (firstCellName && /^[א-ת][א-ת\s׳״'\-]{2,60}$/u.test(firstCellName) && firstCellName.split(/\s+/).length >= 2) docxOnly.set(key(firstCellName), firstCellName);
@@ -246,21 +249,32 @@
     const campusOnly = campus.students.filter(student => student.schedule?.timetable?.length && !matchedStudentIds.has(student.id || key(student.fullName)));
     return { changes: [...found.values()], unknownRows, docxOnly: [...docxOnly.values()], campusOnly, fuzzyMatches: [...fuzzyMatches.values()] };
   }
+  function renderLegacyImportPreview(tables, result, manualMappings) {
+    const requests = result.changes.filter(item => item.kind === "request"); const reservations = result.changes.filter(item => item.kind === "reservation");
+    const studentsWithSchedules = campus.students.filter(student => student.schedule?.timetable?.length).sort((first, second) => first.fullName.localeCompare(second.fullName, "he"));
+    const discrepancyBlocks = [
+      result.fuzzyMatches.length ? `<section class="legacy-audit warning"><strong>התאמות שם לבדיקה (${result.fuzzyMatches.length})</strong><p>המערכת מציגה כאן התאמות אוטומטיות וידניות. מומלץ לוודא אותן לפני האישור.</p><ul>${result.fuzzyMatches.map(item => `<li>במסמך: <b>${esc(item.legacyName)}</b> ← במאגר: <b>${esc(item.student.fullName)}</b>${item.method === "manual" ? " · התאמה ידנית" : " · התאמה מוצעת"}</li>`).join("")}</ul></section>` : "",
+      result.docxOnly.length ? `<section class="legacy-audit error"><strong>מופיעים ב־Word אך לא הותאמו למערכת במאגר (${result.docxOnly.length})</strong><p>בחרו עבור כל שם את התלמיד/ה המתאימ/ה. לאחר הבחירה הקובץ ייקרא מחדש והנתונים יופיעו ברשימת השינויים.</p><div class="legacy-mapping-list">${result.docxOnly.map(name => `<label><span>ב־Word: <b>${esc(name)}</b></span><select data-legacy-student-map="${esc(key(name))}"><option value="">בחירת תלמיד/ה עם מערכת…</option>${studentsWithSchedules.map(student => `<option value="${esc(student.id || key(student.fullName))}">${esc(student.fullName)}${student.grade ? ` · ${esc(student.grade)}` : ""}</option>`).join("")}</select></label>`).join("")}</div>${studentsWithSchedules.length ? "" : "<p><b>לא נמצאו במאגר תלמידים עם מערכת שעות שנקלטה.</b></p>"}</section>` : "",
+      result.campusOnly.length ? `<section class="legacy-audit notice"><strong>יש להם מערכת במאגר אך לא נמצאו זכאויות ב־Word (${result.campusOnly.length})</strong><p>ייתכן שאין להם זכאות, או שקיים פער בשם. אפשר להשתמש בהם ברשימות ההתאמה שמופיעות למעלה.</p><ul>${result.campusOnly.map(student => `<li>${esc(student.fullName)}</li>`).join("")}</ul></section>` : ""
+    ].join("");
+    elements.legacyPreview.hidden = false; elements.legacyPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — הפורמט הישן</h3><p>זוהו ${requests.length} עדכוני זכאות ו־${reservations.length} שעות דיפרנציאליות. השעות יישמרו כהזמנות מהפורמט הישן עד לשיוך שלהן במקצוע המתאים.</p></div></div>${discrepancyBlocks}<div class="legacy-change-list">${result.changes.map((item, index) => `<label><input type="checkbox" data-legacy-change="${index}" checked /> <span><strong>${esc(item.student.fullName)}</strong> · ${esc(item.subject)} · ${item.kind === "request" ? `${item.hours} שעות` : `${item.day}, שעה ${item.period}`}</span></label>`).join("") || "<p>לא זוהו שורות חד־משמעיות. אפשר לבצע התאמות שמות למעלה או להמשיך לעריכה ידנית.</p>"}${result.unknownRows.length ? `<small>${result.unknownRows.length} שורות נותרו לבדיקה ולא ייובאו.</small>` : ""}</div><div class="preview-actions"><button id="applyLegacyImport" class="primary-button" type="button" ${result.changes.length ? "" : "disabled"}>אישור והחלת השינויים</button><button id="discardLegacyImport" class="secondary-button" type="button">ביטול</button></div>`;
+    elements.legacyPreview.querySelectorAll("[data-legacy-student-map]").forEach(select => select.addEventListener("change", () => {
+      if (!select.value) return;
+      if ([...manualMappings.values()].some(studentId => String(studentId) === String(select.value))) { select.value = ""; return showToast("התלמיד/ה שנבחר/ה כבר הותאמ/ה לשם אחר במסמך."); }
+      manualMappings.set(select.dataset.legacyStudentMap, select.value);
+      const updated = oldFormatChanges(tables, manualMappings); pendingLegacyImport = { ...updated, tables, manualMappings };
+      renderLegacyImportPreview(tables, updated, manualMappings); showToast("השם הותאם והנתונים נקראו מחדש.");
+    }));
+    document.querySelector("#discardLegacyImport").addEventListener("click", () => { pendingLegacyImport = null; elements.legacyPreview.hidden = true; }); document.querySelector("#applyLegacyImport")?.addEventListener("click", applyLegacyImport);
+  }
   async function scanLegacyDocument() {
     const [file] = elements.legacyFile.files; if (!file) return showToast("בחרו קובץ Word שהורד מהמסמך הישן.");
     if (!campus.students.length) { const message = "לפני ייבוא מהפורמט הישן יש לקלוט תלמידים למאגר, כדי שהמערכת תוכל לזהות אותם בבטחה."; elements.legacyStatus.textContent = message; elements.legacyStatus.className = "file-status error"; return showToast(message); }
     if (!window.DocxTableReader?.parseTables) { elements.legacyStatus.textContent = "רכיב קריאת Word לא נטען. רעננו את הדף ונסו שוב."; elements.legacyStatus.className = "file-status error"; return; }
     elements.legacyScan.disabled = true; elements.legacyStatus.textContent = "קורא את הטבלאות ומכין תצוגה מקדימה…"; elements.legacyStatus.className = "file-status";
     try {
-      const { tables } = await window.DocxTableReader.parseTables(file); const result = oldFormatChanges(tables); pendingLegacyImport = result;
-      const requests = result.changes.filter(item => item.kind === "request"); const reservations = result.changes.filter(item => item.kind === "reservation");
-      const discrepancyBlocks = [
-        result.fuzzyMatches.length ? `<section class="legacy-audit warning"><strong>התאמות שם לבדיקה (${result.fuzzyMatches.length})</strong><p>נמצא פער כתיב קטן. הנתונים שויכו להצעה הבאה, אך מומלץ לוודא לפני האישור.</p><ul>${result.fuzzyMatches.map(item => `<li>במסמך: <b>${esc(item.legacyName)}</b> ← במאגר: <b>${esc(item.student.fullName)}</b></li>`).join("")}</ul></section>` : "",
-        result.docxOnly.length ? `<section class="legacy-audit error"><strong>מופיעים ב־Word אך אין להם מערכת במאגר (${result.docxOnly.length})</strong><p>התלמידים האלה לא ייובאו עד שתיקלט עבורם מערכת שעות או ששם התלמיד יתוקן.</p><ul>${result.docxOnly.map(name => `<li>${esc(name)}</li>`).join("")}</ul></section>` : "",
-        result.campusOnly.length ? `<section class="legacy-audit notice"><strong>יש להם מערכת במאגר אך לא נמצאו זכאויות ב־Word (${result.campusOnly.length})</strong><p>ייתכן שאין להם זכאות, או שקיים פער בשם. מומלץ לבדוק לפני האישור.</p><ul>${result.campusOnly.map(student => `<li>${esc(student.fullName)}</li>`).join("")}</ul></section>` : ""
-      ].join("");
-      elements.legacyPreview.hidden = false; elements.legacyPreview.innerHTML = `<div class="preview-head"><div><h3>תצוגה מקדימה — הפורמט הישן</h3><p>זוהו ${requests.length} עדכוני זכאות ו־${reservations.length} שעות דיפרנציאליות. השעות יישמרו כהזמנות מהפורמט הישן עד לשיוך שלהן במקצוע המתאים.</p></div></div>${discrepancyBlocks}<div class="legacy-change-list">${result.changes.map((item, index) => `<label><input type="checkbox" data-legacy-change="${index}" checked /> <span><strong>${esc(item.student.fullName)}</strong> · ${esc(item.subject)} · ${item.kind === "request" ? `${item.hours} שעות` : `${item.day}, שעה ${item.period}`}</span></label>`).join("") || "<p>לא זוהו שורות חד־משמעיות. אפשר להמשיך לעבוד מהמאגר ולערוך ידנית.</p>"}${result.unknownRows.length ? `<small>${result.unknownRows.length} שורות נותרו לבדיקה ולא ייובאו.</small>` : ""}</div><div class="preview-actions"><button id="applyLegacyImport" class="primary-button" type="button" ${result.changes.length ? "" : "disabled"}>אישור והחלת השינויים</button><button id="discardLegacyImport" class="secondary-button" type="button">ביטול</button></div>`;
-      document.querySelector("#discardLegacyImport").addEventListener("click", () => { pendingLegacyImport = null; elements.legacyPreview.hidden = true; }); document.querySelector("#applyLegacyImport")?.addEventListener("click", applyLegacyImport);
+      const { tables } = await window.DocxTableReader.parseTables(file); const manualMappings = new Map(); const result = oldFormatChanges(tables, manualMappings); pendingLegacyImport = { ...result, tables, manualMappings };
+      renderLegacyImportPreview(tables, result, manualMappings);
       elements.legacyStatus.textContent = result.changes.length ? `נמצאו ${tables.length} טבלאות ו־${result.changes.length} שינויים אפשריים. שום דבר לא נשמר לפני אישור.` : `נמצאו ${tables.length} טבלאות, אך לא זוהו שורות חד־משמעיות. בדקו שהקובץ הוא ההורדה העדכנית מהמסמך ושהתלמידים כבר נקלטו במאגר.`; elements.legacyStatus.className = result.changes.length ? "file-status ok" : "file-status error";
     } catch (error) { elements.legacyStatus.textContent = error instanceof Error ? error.message : "לא ניתן לקרוא את הקובץ."; elements.legacyStatus.className = "file-status error"; }
     finally { elements.legacyScan.disabled = false; }
@@ -420,5 +434,5 @@
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   refreshTeacherDraftsFromStoredSchedules();
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=29").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=30").catch(() => {});
 })();
