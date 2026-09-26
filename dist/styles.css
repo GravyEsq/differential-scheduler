@@ -644,6 +644,15 @@ select:focus, input:focus, textarea:focus, button:focus-visible, a:focus-visible
 .landing-privacy h2 { font-size: clamp(1.45rem, 2.5vw, 2rem); }
 .landing-privacy p:last-child { max-width: 680px; margin: 10px 0 0; color: #4d6867; line-height: 1.65; }
 .landing-footer { min-height: 84px; padding: 20px clamp(22px, 6vw, 84px); display: flex; align-items: center; justify-content: space-between; gap: 20px; color: #c5d3df; background: #102e50; font-size: .88rem; }
+.app-footer { margin-top: 28px; padding: 18px clamp(18px, 4vw, 48px); display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; color: #627286; font-size: .82rem; text-align: center; }
+.app-footer span + span::before { content: "·"; margin-inline-end: 10px; color: #99a6b4; }
+.legacy-audit { margin: 14px 0; padding: 14px 16px; border: 1px solid #cfd8e6; border-radius: 14px; background: #f7f9fc; }
+.legacy-audit strong { display: block; color: #1d3150; }
+.legacy-audit p { margin: 5px 0 8px; color: #55657a; font-size: .9rem; }
+.legacy-audit ul { margin: 0; padding-inline-start: 22px; }
+.legacy-audit.warning { border-color: #e8bd61; background: #fff9eb; }
+.legacy-audit.error { border-color: #df8f8f; background: #fff3f3; }
+.legacy-audit.notice { border-color: #8eb9dc; background: #f1f8ff; }
 
 @media (max-width: 920px) {
   .landing-nav > a:not(.landing-nav-button) { display: none; }
