@@ -50,7 +50,7 @@
   function showToast(text) { elements.toast.textContent = text; elements.toast.classList.add("visible"); clearTimeout(toastTimer); toastTimer = setTimeout(() => elements.toast.classList.remove("visible"), 3500); }
   function clean(value) { return String(value || "").replace(/\s+/g, " ").trim(); }
   function split(value) { return String(value || "").split(/[\n,;]+/).map(clean).filter(Boolean); }
-  function key(value) { return clean(value).toLocaleLowerCase("he").replace(/["׳״'`.,:;()\[\]{}]/g, "").replace(/[-–—]/g, " "); }
+  function key(value) { return clean(value).toLocaleLowerCase("he").replace(/["׳״'`.,:;()\[\]{}_]/g, "").replace(/[-–—]/g, " "); }
   function canonicalSubject(value) {
     const normalized = clean(value);
     const valueKey = key(normalized);
@@ -172,8 +172,7 @@
   }
   function cleanStudentName(value) {
     return clean(value)
-      .replace(/\b(?:ט|י|יא|יב)\s*['׳]?\s*\d+\b.*$/u, "")
-      .replace(/\bכיתה\s+(?:ט|י|יא|יב)\s*['׳]?\s*\d+\b.*$/u, "")
+      .replace(/(?:^|\s)(?:כיתה\s+)?(?:יב|יא|י|ט)\s*['׳]?\s*\d+(?:\s.*)?$/u, "")
       .replace(/[|·]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
@@ -217,7 +216,7 @@
         const explicitMatch = cells.filter(Boolean).map(studentFromLegacyCell).find(Boolean);
         if (explicitMatch) {
           currentStudent = explicitMatch.student; matchedStudentIds.add(currentStudent.id || key(currentStudent.fullName));
-          if (explicitMatch.method === "fuzzy") fuzzyMatches.set(`${explicitMatch.legacyName}|${currentStudent.id}`, explicitMatch);
+          if (explicitMatch.method === "fuzzy") fuzzyMatches.set(`${explicitMatch.legacyName}|${currentStudent.id || key(currentStudent.fullName)}`, explicitMatch);
         } else if (cells[0] && !/שם\s*התלמיד/u.test(cells[0])) {
           currentStudent = null;
           if (firstCellName && /^[א-ת][א-ת\s׳״'\-]{2,60}$/u.test(firstCellName) && firstCellName.split(/\s+/).length >= 2) docxOnly.set(key(firstCellName), firstCellName);
@@ -421,5 +420,5 @@
   elements.archives.addEventListener("click", event => { const button = event.target.closest("[data-view-archive]"); if (button) viewArchive(button.dataset.viewArchive); });
   refreshTeacherDraftsFromStoredSchedules();
   render();
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=28").catch(() => {});
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=29").catch(() => {});
 })();
